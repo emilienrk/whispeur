@@ -18,16 +18,32 @@ targets:
         NSSpeechRecognitionUsageDescription: "Whispeur utilise la reconnaissance vocale."
     settings:
       base:
+        PRODUCT_NAME: Whispeur
         SWIFT_VERSION: 6.0
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Automatic
-        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/build-whisper/bin"
-        HEADER_SEARCH_PATHS: "$(SRCROOT)/whisper.cpp/include"
+        LIBRARY_SEARCH_PATHS:
+          - "$(SRCROOT)/build-whisper/src"
+          - "$(SRCROOT)/build-whisper/ggml/src"
+          - "$(SRCROOT)/build-whisper/ggml/src/ggml-metal"
+          - "$(SRCROOT)/build-whisper/ggml/src/ggml-blas"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/whisper.cpp/include"
+          - "$(SRCROOT)/whisper.cpp/ggml/include"
         SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Whispeur/Bridge/WhisperBridge.h"
         OTHER_LDFLAGS:
-          - "-L$(SRCROOT)/build-whisper/bin"
+          - "-L$(SRCROOT)/build-whisper/src"
+          - "-L$(SRCROOT)/build-whisper/ggml/src"
+          - "-L$(SRCROOT)/build-whisper/ggml/src/ggml-metal"
+          - "-L$(SRCROOT)/build-whisper/ggml/src/ggml-blas"
           - "-lwhisper"
+          - "-lggml"
+          - "-lggml-base"
+          - "-lggml-cpu"
+          - "-lggml-metal"
+          - "-lggml-blas"
+          - "-lc++"
           - "-framework Accelerate"
           - "-framework Metal"
           - "-framework Foundation"
