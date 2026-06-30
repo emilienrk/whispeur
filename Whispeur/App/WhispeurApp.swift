@@ -25,6 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let whisperService   = WhisperService()
     let clipboardService = ClipboardService()
     let settings         = AppSettings.shared
+    let historyService   = HistoryService()
 
     private(set) var coordinator: RecordingCoordinator!
     private var statusBar: StatusBarController!
@@ -38,14 +39,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             hotkeyManager: hotkeyManager,
             audioCapture: audioCapture,
             whisperService: whisperService,
-            clipboardService: clipboardService
+            clipboardService: clipboardService,
+            historyService: historyService
         )
 
         // 2. Apply stored settings to services.
         applySettings()
 
         // 3. Status bar.
-        statusBar = StatusBarController(coordinator: coordinator, settings: settings)
+        statusBar = StatusBarController(coordinator: coordinator, settings: settings, historyService: historyService)
 
         // 4. Observe pipeline state → update icon (zero-latency via withObservationTracking).
         observePipelineState()

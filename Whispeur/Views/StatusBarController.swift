@@ -16,8 +16,10 @@ final class StatusBarController: NSObject {
 
     private var statusItem: NSStatusItem
     private var settingsWindow: NSWindow?
+    private var historyWindow: NSWindow?
     private let coordinator: RecordingCoordinator
     private let settings: AppSettings
+    private let historyService: HistoryService
 
     // The persistent NSMenu assigned once — content rebuilt in menuWillOpen.
     private let persistentMenu = NSMenu()
@@ -32,9 +34,10 @@ final class StatusBarController: NSObject {
 
     // MARK: - Init
 
-    init(coordinator: RecordingCoordinator, settings: AppSettings = .shared) {
+    init(coordinator: RecordingCoordinator, settings: AppSettings = .shared, historyService: HistoryService) {
         self.coordinator = coordinator
         self.settings = settings
+        self.historyService = historyService
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
         configureButton()
@@ -151,7 +154,11 @@ final class StatusBarController: NSObject {
 
         menu.addItem(.separator())
 
-        // ── Settings / Quit ───────────────────────────────────────────────
+        // ── Settings / History / Quit ─────────────────────────────────────
+        let historyItem = NSMenuItem(title: "Historique des transcriptions…", action: #selector(openHistory), keyEquivalent: "h")
+        historyItem.target = self
+        menu.addItem(historyItem)
+        
         let settingsItem = NSMenuItem(title: "Paramètres…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -266,6 +273,41 @@ final class StatusBarController: NSObject {
         windowCloseDelegate = closeDelegate
         window.delegate = closeDelegate
         settingsWindow = window
+
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func openHistory() {
+        if let window = historyWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let view = HistoryView(historyService: historyService)
+        let hosting = NSHostingController(rootView: view)
+
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Historique"
+        window.styleMask = [.titled, .closable, .resizable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.setContentSize(NSSize(width: 450, height: 500))
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.backgroundColor = .windowBackgroundColor
+        
+        let closeDelegate = WindowCloseDelegate { [weak self] in
+            self?.historyWindow = nil
+        }
+        // Assuming we need to keep a strong reference if multiple windows are open?
+        // Let's just use the same windowCloseDelegate for history, or just let it close normally.
+        // Actually, we can just retain the delegate if needed, but since we use historyWindow, we can just nil it out.
+        // Swift requires strong ref to NSWindowDelegate if using a custom object.
+        objc_setAssociatedObject(window, "WindowCloseDelegate", closeDelegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        window.delegate = closeDelegate
+        historyWindow = window
 
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

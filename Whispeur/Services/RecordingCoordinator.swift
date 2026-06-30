@@ -48,6 +48,7 @@ final class RecordingCoordinator {
     let audioCapture: AudioCaptureService
     let whisperService: WhisperService
     let clipboardService: ClipboardService
+    let historyService: HistoryService
 
     // MARK: Configuration
 
@@ -69,12 +70,14 @@ final class RecordingCoordinator {
         hotkeyManager: HotkeyManager,
         audioCapture: AudioCaptureService,
         whisperService: WhisperService,
-        clipboardService: ClipboardService
+        clipboardService: ClipboardService,
+        historyService: HistoryService
     ) {
         self.hotkeyManager  = hotkeyManager
         self.audioCapture   = audioCapture
         self.whisperService = whisperService
         self.clipboardService = clipboardService
+        self.historyService = historyService
 
         configureHotkeyCallbacks()
     }
@@ -181,11 +184,15 @@ final class RecordingCoordinator {
             return
         }
 
-        // Phase 3: Paste
+        // Phase 3: Paste & Save History
         pipelineState = .pasting
         lastTranscription = text
+        
         let result = await clipboardService.copyAndPaste(text)
         logger.info("Paste result: \(String(describing: result))")
+        
+        // Save to history
+        historyService.add(text)
 
         pipelineState = .idle
     }
