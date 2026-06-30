@@ -1,0 +1,36 @@
+name: Whispeur
+options:
+  bundleIdPrefix: com.whispeur
+  deploymentTarget:
+    macOS: "13.0"
+
+targets:
+  Whispeur:
+    type: application
+    platform: macOS
+    sources:
+      - path: Whispeur
+    info:
+      path: Whispeur/Info.plist
+      properties:
+        LSUIElement: true
+        NSMicrophoneUsageDescription: "Whispeur a besoin du micro pour la dictée vocale."
+        NSSpeechRecognitionUsageDescription: "Whispeur utilise la reconnaissance vocale."
+    settings:
+      base:
+        SWIFT_VERSION: 6.0
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Automatic
+        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/build-whisper/bin"
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/whisper.cpp/include"
+        SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Whispeur/Bridge/WhisperBridge.h"
+        OTHER_LDFLAGS:
+          - "-L$(SRCROOT)/build-whisper/bin"
+          - "-lwhisper"
+          - "-framework Accelerate"
+          - "-framework Metal"
+          - "-framework Foundation"
+          - "-framework AVFoundation"
+          - "-framework AppKit"
+    dependencies: []

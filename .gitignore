@@ -1,0 +1,5 @@
+.DS_Store
+build-whisper/
+Whispeur.xcodeproj/
+Models/*.bin
+Samples/*.wav
