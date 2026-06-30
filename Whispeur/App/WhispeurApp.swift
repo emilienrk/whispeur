@@ -14,14 +14,10 @@ struct WhispeurApp: App {
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("[Whispeur] Lancé en background")
-
-        // Demande la permission micro dès le lancement (non-bloquant).
-        // MicrophonePermissionManager est @MainActor, donc on l'instancie dans une Task @MainActor.
+        // Request microphone permission on launch non-blockingly.
         Task { @MainActor in
             let micPermission = MicrophonePermissionManager()
             await micPermission.requestIfNeeded()
-            print("[Whispeur] Permission microphone : \(micPermission.status)")
         }
     }
 }
