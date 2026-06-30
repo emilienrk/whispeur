@@ -79,26 +79,34 @@ final class ClipboardService {
         // Without this, some apps (e.g. Terminal) might not receive the paste.
         try? await Task.sleep(for: .milliseconds(80))
 
-        return await Task.detached(priority: .userInitiated) {
-            guard let source = CGEventSource(stateID: .hidSystemState) else { return false }
+        // CGEvent.post must NOT run on the AVFoundation realtime thread (RealtimeMessenger).
+        // We use DispatchQueue.main to guarantee a safe, deterministic posting thread.
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                guard let source = CGEventSource(stateID: .hidSystemState) else {
+                    continuation.resume(returning: false)
+                    return
+                }
 
-            let vKeyCode: CGKeyCode = 9 // kVK_ANSI_V
+                let vKeyCode: CGKeyCode = 9 // kVK_ANSI_V
 
-            guard
-                let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true),
-                let keyUp   = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false)
-            else { return false }
+                guard
+                    let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true),
+                    let keyUp   = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false)
+                else {
+                    continuation.resume(returning: false)
+                    return
+                }
 
-            // Add ⌘ flag.
-            keyDown.flags = .maskCommand
-            keyUp.flags   = .maskCommand
+                keyDown.flags = .maskCommand
+                keyUp.flags   = .maskCommand
 
-            // Post to the HID event stream (affects the currently focused application).
-            keyDown.post(tap: .cgSessionEventTap)
-            keyUp.post(tap: .cgSessionEventTap)
+                keyDown.post(tap: .cgSessionEventTap)
+                keyUp.post(tap: .cgSessionEventTap)
 
-            return true
-        }.value
+                continuation.resume(returning: true)
+            }
+        }
     }
 
     /// Sends a local notification informing the user the text is in the clipboard.

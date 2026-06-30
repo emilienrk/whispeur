@@ -149,8 +149,12 @@ private struct AccessibilityPermissionCard: View {
                         }
 
                         Button {
-                            hotkeyManager.openAccessibilityPreferences()
-                            hotkeyManager.startPollingAccessibility()
+                            // promptAccessibilityPermission() shows the macOS system dialog
+                            // AND opens the Accessibility prefs pane if needed.
+                            if !hotkeyManager.promptAccessibilityPermission() {
+                                hotkeyManager.openAccessibilityPreferences()
+                                hotkeyManager.startPollingAccessibility()
+                            }
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "arrow.up.right.square")
@@ -177,13 +181,15 @@ private struct AccessibilityPermissionCard: View {
                         }
                         .buttonStyle(.plain)
 
-                        // Polling indicator
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .scaleEffect(0.55)
-                            Text("En attente de votre autorisation…")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white.opacity(0.3))
+                        // Polling indicator — only shown while actively waiting
+                        if hotkeyManager.accessibilityPollTask != nil {
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                    .scaleEffect(0.55)
+                                Text("En attente de votre autorisation…")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.white.opacity(0.3))
+                            }
                         }
                     }
                     .frame(minHeight: 44)
@@ -192,7 +198,10 @@ private struct AccessibilityPermissionCard: View {
         }
         .onAppear {
             hotkeyManager.checkAccessibilityPermission()
-            if !hotkeyManager.hasAccessibilityPermission {
+            if hotkeyManager.hasAccessibilityPermission {
+                // Permission already granted — make sure the listener is running.
+                hotkeyManager.startListening()
+            } else {
                 hotkeyManager.startPollingAccessibility()
             }
         }

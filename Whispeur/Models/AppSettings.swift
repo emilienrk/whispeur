@@ -1,7 +1,9 @@
 // AppSettings.swift
 // Whispeur
 //
-// Centralized persistent preferences backed by UserDefaults (@AppStorage).
+// Centralized persistent preferences backed by UserDefaults.
+// All stored properties are in-memory so @Observable can track mutations.
+// Each didSet syncs to UserDefaults for persistence.
 
 import Foundation
 
@@ -13,15 +15,35 @@ final class AppSettings {
 
     static let shared = AppSettings()
 
-    // MARK: - Hotkey
+    // MARK: - Init (load from UserDefaults)
+
+    private init() {
+        let ud = UserDefaults.standard
+        hotKeyCode             = (ud.integer(forKey: "hotKeyCode").nonZero) ?? 61
+        hotKeyModifiers        = ud.integer(forKey: "hotKeyModifiers")
+        _hotKeyModeRaw         = ud.string(forKey: "hotKeyMode") ?? HotKeyMode.pushToTalk.rawValue
+        selectedModelFilename  = ud.string(forKey: "selectedModel") ?? "ggml-base.bin"
+        languageCode           = ud.string(forKey: "language") ?? "auto"
+        _autoPasteEnabled      = (ud.object(forKey: "autoPaste") as? Bool) ?? true
+        if let data = ud.data(forKey: "favoritedModels"),
+           let arr  = try? JSONDecoder().decode([String].self, from: data) {
+            favoritedModelFilenames = arr
+        } else {
+            favoritedModelFilenames = []
+        }
+    }
+
+    // MARK: - Hotkey (stored in-memory, persisted on write)
 
     var hotKeyCode: Int {
-        get { _hotKeyCode }
-        set { _hotKeyCode = newValue }
+        didSet { UserDefaults.standard.set(hotKeyCode, forKey: "hotKeyCode") }
     }
     var hotKeyModifiers: Int {
-        get { _hotKeyModifiers }
-        set { _hotKeyModifiers = newValue }
+        didSet { UserDefaults.standard.set(hotKeyModifiers, forKey: "hotKeyModifiers") }
+    }
+
+    private var _hotKeyModeRaw: String {
+        didSet { UserDefaults.standard.set(_hotKeyModeRaw, forKey: "hotKeyMode") }
     }
     var hotKeyMode: HotKeyMode {
         get { HotKeyMode(rawValue: _hotKeyModeRaw) ?? .pushToTalk }
@@ -30,10 +52,8 @@ final class AppSettings {
 
     // MARK: - Model
 
-    /// Filename of the selected ggml model (e.g. "ggml-base.bin")
     var selectedModelFilename: String {
-        get { _selectedModelFilename }
-        set { _selectedModelFilename = newValue }
+        didSet { UserDefaults.standard.set(selectedModelFilename, forKey: "selectedModel") }
     }
 
     var selectedModelDescriptor: WhisperModelDescriptor? {
@@ -47,8 +67,7 @@ final class AppSettings {
     // MARK: - Language
 
     var languageCode: String {
-        get { _languageCode }
-        set { _languageCode = newValue }
+        didSet { UserDefaults.standard.set(languageCode, forKey: "language") }
     }
 
     var selectedLanguage: WhisperLanguage {
@@ -58,6 +77,9 @@ final class AppSettings {
 
     // MARK: - Auto-paste
 
+    private var _autoPasteEnabled: Bool {
+        didSet { UserDefaults.standard.set(_autoPasteEnabled, forKey: "autoPaste") }
+    }
     var autoPasteEnabled: Bool {
         get { _autoPasteEnabled }
         set { _autoPasteEnabled = newValue }
@@ -67,9 +89,12 @@ final class AppSettings {
 
     static let maxFavorites = 4
 
+    /// In-memory array tracked by @Observable — persisted to UserDefaults on each write.
     var favoritedModelFilenames: [String] {
-        get { _favoritedModelFilenames }
-        set { _favoritedModelFilenames = newValue }
+        didSet {
+            let data = try? JSONEncoder().encode(favoritedModelFilenames)
+            UserDefaults.standard.set(data, forKey: "favoritedModels")
+        }
     }
 
     func toggleFavorite(filename: String) {
@@ -89,47 +114,6 @@ final class AppSettings {
     var favoritedModelDescriptors: [WhisperModelDescriptor] {
         favoritedModelFilenames.compactMap { fn in
             WhisperModelDescriptor.catalog.first { $0.filename == fn }
-        }
-    }
-
-    // MARK: - Private storage (UserDefaults-backed)
-
-    private var _hotKeyCode: Int {
-        get { UserDefaults.standard.integer(forKey: "hotKeyCode").nonZero ?? 61 }
-        set { UserDefaults.standard.set(newValue, forKey: "hotKeyCode") }
-    }
-    private var _hotKeyModifiers: Int {
-        get { UserDefaults.standard.integer(forKey: "hotKeyModifiers") }
-        set { UserDefaults.standard.set(newValue, forKey: "hotKeyModifiers") }
-    }
-    private var _hotKeyModeRaw: String {
-        get { UserDefaults.standard.string(forKey: "hotKeyMode") ?? HotKeyMode.pushToTalk.rawValue }
-        set { UserDefaults.standard.set(newValue, forKey: "hotKeyMode") }
-    }
-    private var _selectedModelFilename: String {
-        get { UserDefaults.standard.string(forKey: "selectedModel") ?? "ggml-base.bin" }
-        set { UserDefaults.standard.set(newValue, forKey: "selectedModel") }
-    }
-    private var _languageCode: String {
-        get { UserDefaults.standard.string(forKey: "language") ?? "auto" }
-        set { UserDefaults.standard.set(newValue, forKey: "language") }
-    }
-    private var _autoPasteEnabled: Bool {
-        get {
-            let stored = UserDefaults.standard.object(forKey: "autoPaste")
-            return stored as? Bool ?? true
-        }
-        set { UserDefaults.standard.set(newValue, forKey: "autoPaste") }
-    }
-    private var _favoritedModelFilenames: [String] {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: "favoritedModels"),
-                  let arr = try? JSONDecoder().decode([String].self, from: data) else { return [] }
-            return arr
-        }
-        set {
-            let data = try? JSONEncoder().encode(newValue)
-            UserDefaults.standard.set(data, forKey: "favoritedModels")
         }
     }
 

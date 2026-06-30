@@ -76,6 +76,16 @@ private struct TapSharedState {
     var eventTap: CFMachPort?
 }
 
+// MARK: - TapStateContainer
+// A plain class (NOT @Observable) that holds all state accessed from the
+// CGEventTap callback thread. Stored as a `let` in HotkeyManager so the
+// @Observable macro does NOT wrap it with queue-checking tracking code.
+private final class TapStateContainer: @unchecked Sendable {
+    var tapState     = TapSharedState()
+    var runLoopSource: CFRunLoopSource?
+    var runLoopThread: Thread?
+}
+
 // MARK: - HotkeyManager
 
 @MainActor
@@ -95,14 +105,12 @@ final class HotkeyManager {
     var onKeyUp:   (@MainActor () -> Void)?
 
     // MARK: - Tap infrastructure
-    // These fields are accessed from nonisolated contexts (deinit + CGEventTap callback thread).
-    // They are only mutated on the MainActor while the tap is stopped — safe but not statically verified.
-    nonisolated(unsafe) private var tapState = TapSharedState()
-    nonisolated(unsafe) private var runLoopSource: CFRunLoopSource?
-    nonisolated(unsafe) private var runLoopThread: Thread?
+    // `let` property — @Observable does NOT generate observation tracking for `let`.
+    // Accessing tapBox from the CGEventTap thread is therefore safe.
+    private let tapBox = TapStateContainer()
 
     // MARK: - Accessibility polling
-    private var accessibilityPollTask: Task<Void, Never>?
+    private(set) var accessibilityPollTask: Task<Void, Never>?
 
     // MARK: - Init / Deinit
 
@@ -111,21 +119,22 @@ final class HotkeyManager {
     }
 
     deinit {
-        // deinit is nonisolated — access nonisolated(unsafe) fields directly.
-        if let tap = tapState.eventTap {
+        if let tap = tapBox.tapState.eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
             CFMachPortInvalidate(tap)
         }
-        if let src = runLoopSource {
+        if let src = tapBox.runLoopSource {
             CFRunLoopSourceInvalidate(src)
         }
-        runLoopThread?.cancel()
+        tapBox.runLoopThread?.cancel()
     }
 
     // MARK: - Public API
 
     func checkAccessibilityPermission() {
-        hasAccessibilityPermission = AXIsProcessTrusted()
+        let trusted = AXIsProcessTrusted()
+        print("[Hotkey] checkAccessibilityPermission() -> \(trusted)")
+        hasAccessibilityPermission = trusted
     }
 
     func openAccessibilityPreferences() {
@@ -133,16 +142,34 @@ final class HotkeyManager {
         NSWorkspace.shared.open(url)
     }
 
-    /// Poll every 2 seconds until permission is granted, then start listening.
+    /// Requests the accessibility permission dialog to appear (if not yet granted).
+    /// Returns true if already trusted.
+    @discardableResult
+    func promptAccessibilityPermission() -> Bool {
+        // Use the raw string key to avoid Swift 6 concurrency issues with kAXTrustedCheckOptionPrompt.
+        let options: CFDictionary = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        print("[Hotkey] promptAccessibilityPermission() -> \(trusted)")
+        hasAccessibilityPermission = trusted
+        return trusted
+    }
+
+    /// Poll every 1.5 seconds until permission is granted, then start listening.
     func startPollingAccessibility() {
-        guard accessibilityPollTask == nil else { return }
+        guard accessibilityPollTask == nil else {
+            print("[Hotkey] startPollingAccessibility() skipped — already polling")
+            return
+        }
+        print("[Hotkey] Starting accessibility polling...")
         accessibilityPollTask = Task { [weak self] in
             while true {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: .seconds(1.5))
                 guard let self else { return }
                 let trusted = AXIsProcessTrusted()
+                print("[Hotkey] Poll tick: AXIsProcessTrusted=\(trusted)")
                 self.hasAccessibilityPermission = trusted
                 if trusted {
+                    print("[Hotkey] Accessibility granted! Starting listener...")
                     if !self.isListening { self.startListening() }
                     break
                 }
@@ -154,12 +181,20 @@ final class HotkeyManager {
     func stopPollingAccessibility() {
         accessibilityPollTask?.cancel()
         accessibilityPollTask = nil
+        print("[Hotkey] Stopped accessibility polling")
     }
 
     func startListening() {
-        guard !isListening else { return }
+        guard !isListening else {
+            print("[Hotkey] startListening() skipped — already listening")
+            return
+        }
         hasAccessibilityPermission = AXIsProcessTrusted()
-        guard hasAccessibilityPermission else { return }
+        print("[Hotkey] startListening() — AXIsProcessTrusted=\(hasAccessibilityPermission)")
+        guard hasAccessibilityPermission else {
+            print("[Hotkey] startListening() aborted — no accessibility permission")
+            return
+        }
         installEventTap()
     }
 
@@ -173,23 +208,23 @@ final class HotkeyManager {
         let wasListening = isListening
         if wasListening { shutdownTap() }
         hotKey = newKey
-        tapState.hotKey = newKey
+        tapBox.tapState.hotKey = newKey
         if wasListening { installEventTap() }
     }
 
     func setMode(_ newMode: HotKeyMode) {
         mode = newMode
-        tapState.mode = newMode
-        tapState.isToggledOn = false
+        tapBox.tapState.mode = newMode
+        tapBox.tapState.isToggledOn = false
     }
 
     // MARK: - CGEventTap lifecycle
 
     private func installEventTap() {
-        // Copy UI state into the shared struct before enabling the tap.
-        tapState.hotKey      = hotKey
-        tapState.mode        = mode
-        tapState.isToggledOn = false
+        // Copy UI state into the tap container before enabling the tap.
+        tapBox.tapState.hotKey      = hotKey
+        tapBox.tapState.mode        = mode
+        tapBox.tapState.isToggledOn = false
 
         let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
                               | (1 << CGEventType.keyUp.rawValue)
@@ -202,17 +237,18 @@ final class HotkeyManager {
             callback: hotkeyEventTapCallback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
+            print("[Hotkey] CGEvent.tapCreate failed — accessibility permission revoked?")
             hasAccessibilityPermission = false
             return
         }
 
-        tapState.eventTap = tap
+        tapBox.tapState.eventTap = tap
 
         let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = src
+        tapBox.runLoopSource = src
 
-        // Capture src as nonisolated(unsafe) to satisfy Swift 6 Sendable check.
-        nonisolated(unsafe) let srcForThread: CFRunLoopSource = src!
+        // `src` captured by value into the thread closure (safe: CFRunLoopSource is a CF ref).
+        let srcForThread: CFRunLoopSource = src!
         let thread = Thread {
             CFRunLoopAddSource(CFRunLoopGetCurrent(), srcForThread, .commonModes)
             CFRunLoopRun()
@@ -220,24 +256,26 @@ final class HotkeyManager {
         thread.name = "com.whispeur.hotkeyrunloop"
         thread.qualityOfService = .userInteractive
         thread.start()
-        runLoopThread = thread
+        tapBox.runLoopThread = thread
 
         CGEvent.tapEnable(tap: tap, enable: true)
         isListening = true
+        print("[Hotkey] Event tap installed ✅")
     }
 
     private func shutdownTap() {
-        if let tap = tapState.eventTap {
+        if let tap = tapBox.tapState.eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
             CFMachPortInvalidate(tap)
-            tapState.eventTap = nil
+            tapBox.tapState.eventTap = nil
         }
-        if let src = runLoopSource {
+        if let src = tapBox.runLoopSource {
             CFRunLoopSourceInvalidate(src)
-            runLoopSource = nil
+            tapBox.runLoopSource = nil
         }
-        runLoopThread?.cancel()
-        runLoopThread = nil
+        tapBox.runLoopThread?.cancel()
+        tapBox.runLoopThread = nil
+        print("[Hotkey] Event tap shut down")
     }
 
     // MARK: - Event handling (called from tap thread — nonisolated)
@@ -246,7 +284,7 @@ final class HotkeyManager {
 
         // Re-enable the tap if the system disabled it.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap = tapState.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            if let tap = tapBox.tapState.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passUnretained(event)
         }
 
@@ -256,33 +294,23 @@ final class HotkeyManager {
 
         // Check key code.
         let eventKeyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
-        guard eventKeyCode == tapState.hotKey.keyCode else {
+        guard eventKeyCode == tapBox.tapState.hotKey.keyCode else {
             return Unmanaged.passUnretained(event)
         }
 
         // Check modifier flags.
-        // Special case: if the hotkey IS a modifier key (e.g. Right Option, keyCode 61),
-        // macOS automatically sets maskAlternate in the event flags, so we must
-        // ignore that flag from the event when the hotkey keyCode corresponds to a modifier.
         let relevantMask = CGEventFlags.maskControl.rawValue
                          | CGEventFlags.maskAlternate.rawValue
                          | CGEventFlags.maskShift.rawValue
                          | CGEventFlags.maskCommand.rawValue
         var eventFlagsRaw = event.flags.rawValue & relevantMask
-        let targetModifiersRaw = UInt64(tapState.hotKey.modifiers)
+        let targetModifiersRaw = UInt64(tapBox.tapState.hotKey.modifiers)
 
-        // If the hotkey is a lone modifier key, strip its own flag from the event flags
-        // because the key itself contributes its own flag while pressed.
-        let modifierKeyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62] // Cmd, Shift, Ctrl, Option variants
+        let modifierKeyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62]
         if modifierKeyCodes.contains(eventKeyCode) {
-            // Strip the flag that corresponds to the physical key being pressed.
-            // For Right Option (61) / Left Option (58): strip maskAlternate
             if eventKeyCode == 58 || eventKeyCode == 61 { eventFlagsRaw &= ~CGEventFlags.maskAlternate.rawValue }
-            // For Right Cmd (54) / Left Cmd (55): strip maskCommand
             if eventKeyCode == 54 || eventKeyCode == 55 { eventFlagsRaw &= ~CGEventFlags.maskCommand.rawValue }
-            // For Right Shift (60) / Left Shift (56): strip maskShift
             if eventKeyCode == 56 || eventKeyCode == 60 { eventFlagsRaw &= ~CGEventFlags.maskShift.rawValue }
-            // For Right Ctrl (62) / Left Ctrl (59): strip maskControl
             if eventKeyCode == 59 || eventKeyCode == 62 { eventFlagsRaw &= ~CGEventFlags.maskControl.rawValue }
         }
 
@@ -290,39 +318,37 @@ final class HotkeyManager {
             return Unmanaged.passUnretained(event)
         }
 
-        // Dispatch to recording logic.
         switch type {
         case .keyDown: fireKeyDown()
         case .keyUp:   fireKeyUp()
         default:       break
         }
 
-        // Consume the event — don't forward to other apps.
         return nil
     }
 
     nonisolated private func fireKeyDown() {
-        switch tapState.mode {
+        switch tapBox.tapState.mode {
         case .pushToTalk:
             DispatchQueue.main.async { [weak self] in self?.onKeyDown?() }
 
         case .toggle:
-            if !tapState.isToggledOn {
-                tapState.isToggledOn = true
+            if !tapBox.tapState.isToggledOn {
+                tapBox.tapState.isToggledOn = true
                 DispatchQueue.main.async { [weak self] in self?.onKeyDown?() }
             } else {
-                tapState.isToggledOn = false
+                tapBox.tapState.isToggledOn = false
                 DispatchQueue.main.async { [weak self] in self?.onKeyUp?() }
             }
         }
     }
 
     nonisolated private func fireKeyUp() {
-        switch tapState.mode {
+        switch tapBox.tapState.mode {
         case .pushToTalk:
             DispatchQueue.main.async { [weak self] in self?.onKeyUp?() }
         case .toggle:
-            break  // Toggle stops on second keyDown, not on keyUp.
+            break
         }
     }
 }

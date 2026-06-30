@@ -2,14 +2,15 @@
 // Whispeur
 //
 // Manages the NSStatusItem (menu bar icon) and its rich menu.
-// Left click shows the menu directly (with "Start recording" action).
+// Menu is rebuilt via NSMenuDelegate.menuWillOpen each time it opens —
+// avoids any click-handler re-entrancy that caused the duplicate icon.
 // The icon reacts live to the PipelineState via observation.
 
 import AppKit
 import SwiftUI
 
 @MainActor
-final class StatusBarController {
+final class StatusBarController: NSObject {
 
     // MARK: - Properties
 
@@ -17,6 +18,9 @@ final class StatusBarController {
     private var settingsWindow: NSWindow?
     private let coordinator: RecordingCoordinator
     private let settings: AppSettings
+
+    // The persistent NSMenu assigned once — content rebuilt in menuWillOpen.
+    private let persistentMenu = NSMenu()
 
     // Animation timer for the recording pulse.
     private var pulseTimer: Timer?
@@ -32,7 +36,9 @@ final class StatusBarController {
         self.coordinator = coordinator
         self.settings = settings
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        super.init()
         configureButton()
+        print("[StatusBar] Initialized ✅")
     }
 
     // MARK: - Button setup
@@ -41,27 +47,48 @@ final class StatusBarController {
         guard let button = statusItem.button else { return }
         button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Whispeur")
         button.image?.isTemplate = true
-        button.action = #selector(handleButtonClick(_:))
-        button.target = self
-        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        // Assign a persistent menu with self as delegate.
+        // macOS calls menuWillOpen before each display — no custom click handler needed.
+        // This is the canonical way to avoid double-icon / re-entrancy issues.
+        persistentMenu.delegate = self
+        statusItem.menu = persistentMenu
     }
 
-    // MARK: - Menu construction (rebuilt on each show so it's always fresh)
+    // MARK: - Menu construction (called from menuWillOpen)
 
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
 
         // ── Status / trigger ─────────────────────────────────────────────
-        let isRecording = coordinator.pipelineState == .recording
-        let isIdle = coordinator.pipelineState == .idle
+        let state = coordinator.pipelineState
+        let isActive = state == .recording || state == .loadingModel
 
-        let triggerItem = NSMenuItem(
-            title: isRecording ? "⏹ Arrêter l'enregistrement" : "▶ Démarrer l'enregistrement",
-            action: isIdle || isRecording ? #selector(triggerRecording) : nil,
-            keyEquivalent: ""
-        )
+        let triggerTitle: String
+        let triggerAction: Selector?
+        switch state {
+        case .idle:
+            triggerTitle  = "▶ Démarrer l'enregistrement"
+            triggerAction = #selector(triggerRecording)
+        case .loadingModel:
+            triggerTitle  = "⏹ Arrêter (chargement modèle…)"
+            triggerAction = #selector(triggerRecording)
+        case .recording:
+            triggerTitle  = "⏹ Arrêter l'enregistrement"
+            triggerAction = #selector(triggerRecording)
+        case .transcribing:
+            triggerTitle  = "⏳ Transcription en cours…"
+            triggerAction = nil
+        case .pasting:
+            triggerTitle  = "📋 Collage en cours…"
+            triggerAction = nil
+        case .error(let msg):
+            triggerTitle  = "⚠️ Erreur : \(msg)"
+            triggerAction = nil
+        }
+
+        let triggerItem = NSMenuItem(title: triggerTitle, action: triggerAction, keyEquivalent: "")
         triggerItem.target = self
-        triggerItem.isEnabled = isIdle || isRecording
+        triggerItem.isEnabled = triggerAction != nil
         menu.addItem(triggerItem)
 
         menu.addItem(.separator())
@@ -111,15 +138,13 @@ final class StatusBarController {
             for model in favorites {
                 let isActive = settings.selectedModelFilename == model.filename
                 let item = NSMenuItem(
-                    title: (isActive ? "✓ " : "   ") + model.name + "  ·  \(model.sizeInfo)",
+                    title: model.name + "  ·  \(model.sizeInfo)",
                     action: #selector(selectFavoriteModel(_:)),
                     keyEquivalent: ""
                 )
                 item.target = self
                 item.representedObject = model.filename
-                if isActive {
-                    item.state = .on
-                }
+                item.state = isActive ? .on : .off  // macOS draws the native ✓ when .on
                 menu.addItem(item)
             }
         }
@@ -131,12 +156,16 @@ final class StatusBarController {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
-        menu.addItem(NSMenuItem(title: "Quitter Whispeur", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(
+            title: "Quitter Whispeur",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        ))
 
         return menu
     }
 
-    // MARK: - State updates (call from coordinator observation)
+    // MARK: - State updates (called from coordinator observation)
 
     func updateIcon(for state: PipelineState) {
         pulseTimer?.invalidate()
@@ -191,25 +220,12 @@ final class StatusBarController {
 
     // MARK: - Actions
 
-    @objc private func handleButtonClick(_ sender: NSStatusBarButton) {
-        // Both left and right click show the rich menu.
-        let menu = buildMenu()
-        statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        // Clear the menu reference so the next click rebuilds it fresh.
-        DispatchQueue.main.async { [weak self] in
-            self?.statusItem.menu = nil
-        }
-    }
-
     @objc private func triggerRecording() {
+        print("[StatusBar] triggerRecording() — state: \(coordinator.pipelineState)")
         switch coordinator.pipelineState {
-        case .idle:
-            coordinator.onHotkeyDown()
-        case .recording:
-            coordinator.onHotkeyUp()
-        default:
-            break
+        case .idle:      coordinator.onHotkeyDown()
+        case .recording: coordinator.onHotkeyUp()
+        default:         break
         }
     }
 
@@ -217,6 +233,7 @@ final class StatusBarController {
         guard let filename = sender.representedObject as? String,
               let descriptor = WhisperModelDescriptor.catalog.first(where: { $0.filename == filename })
         else { return }
+        print("[StatusBar] Selecting favorite model: \(filename)")
         settings.selectedModelFilename = filename
         coordinator.modelURL = descriptor.localURL
     }
@@ -234,7 +251,6 @@ final class StatusBarController {
 
         let window = NSWindow(contentViewController: hosting)
         window.title = "Whispeur"
-        // Transparent titlebar — the SwiftUI header acts as the title.
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
@@ -253,6 +269,22 @@ final class StatusBarController {
 
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+// MARK: - NSMenuDelegate
+
+extension StatusBarController: NSMenuDelegate {
+    /// Called by macOS just before the menu is displayed — rebuild contents fresh.
+    func menuWillOpen(_ menu: NSMenu) {
+        print("[StatusBar] menuWillOpen — rebuilding \(settings.favoritedModelDescriptors.filter(\.isDownloaded).count) favorites")
+        let fresh = buildMenu()
+        menu.removeAllItems()
+        // Move items from the temp menu into the persistent menu.
+        while let item = fresh.items.first {
+            fresh.removeItem(item)
+            menu.addItem(item)
+        }
     }
 }
 

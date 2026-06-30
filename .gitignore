@@ -4,3 +4,4 @@ build-whisper/
 Whispeur.xcodeproj/
 Models/*.bin
 Samples/*.wav
+build/
