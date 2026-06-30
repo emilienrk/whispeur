@@ -129,12 +129,12 @@ final class StatusBarController {
 
         let window = NSWindow(contentViewController: hosting)
         window.title = "Whispeur — Paramètres"
-        window.styleMask = [.titled, .closable, .fullSizeContentView]
-        window.titlebarAppearsTransparent = true
+        window.styleMask = [.titled, .closable]
         window.isMovableByWindowBackground = true
-        window.setContentSize(NSSize(width: 520, height: 480))
+        window.setContentSize(NSSize(width: 520, height: 520))
         window.center()
         window.isReleasedWhenClosed = false
+        window.backgroundColor = .clear
         window.delegate = WindowCloseDelegate { [weak self] in
             self?.settingsWindow = nil
         }

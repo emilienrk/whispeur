@@ -29,9 +29,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var coordinator: RecordingCoordinator!
     private var statusBar: StatusBarController!
 
-    // Observation task — keeps the status bar icon in sync with pipeline state.
-    private var stateObservationTask: Task<Void, Never>?
-
     // MARK: - Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -50,19 +47,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 3. Status bar.
         statusBar = StatusBarController(coordinator: coordinator)
 
-        // 4. Observe pipeline state → update icon.
-        stateObservationTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            var lastState: PipelineState = .idle
-            while !Task.isCancelled {
-                let current = self.coordinator.pipelineState
-                if current != lastState {
-                    lastState = current
-                    self.statusBar.updateIcon(for: current)
-                }
-                try? await Task.sleep(for: .milliseconds(100))
-            }
-        }
+        // 4. Observe pipeline state → update icon (zero-latency via withObservationTracking).
+        observePipelineState()
 
         // 5. Microphone permission (non-blocking).
         Task { @MainActor in
@@ -75,22 +61,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        stateObservationTask?.cancel()
         hotkeyManager.stopListening()
     }
 
     // MARK: - Settings → Services sync
 
     private func applySettings() {
-        // Hotkey
         hotkeyManager.updateHotKey(settings.currentHotKey)
         hotkeyManager.setMode(settings.hotKeyMode)
-
-        // Model
         coordinator.modelURL = settings.selectedModelURL
         coordinator.language = settings.selectedLanguage
-
-        // Clipboard
         clipboardService.autoPasteEnabled = settings.autoPasteEnabled
+    }
+
+    /// Reactive observation: called whenever pipelineState changes.
+    private func observePipelineState() {
+        withObservationTracking {
+            let state = coordinator.pipelineState
+            statusBar.updateIcon(for: state)
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.observePipelineState()
+            }
+        }
     }
 }

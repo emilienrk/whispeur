@@ -2,7 +2,6 @@
 // Whispeur
 //
 // Main settings window: glassmorphism background, 3 sections.
-// All texts in French (UI language), all code in English.
 
 import SwiftUI
 import AppKit
@@ -17,53 +16,55 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            // Vibrancy/glass background
             VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Header with app name and icon
                 header
+                    .padding(.top, 12)
 
-                // Tab picker
                 tabPicker
                     .padding(.horizontal, 24)
-                    .padding(.bottom, 16)
+                    .padding(.vertical, 12)
 
-                // Tab content
-                ZStack {
-                    switch selectedTab {
-                    case .hotkey:   HotkeySection(settings: settings)
-                    case .model:    ModelSection(settings: settings, coordinator: coordinator)
-                    case .language: LanguageSection(settings: settings)
+                // Scrollable tab content
+                ScrollView(.vertical, showsIndicators: false) {
+                    ZStack {
+                        switch selectedTab {
+                        case .hotkey:
+                            HotkeySection(
+                                settings: settings,
+                                hotkeyManager: coordinator.hotkeyManager
+                            )
+                        case .model:
+                            ModelSection(settings: settings, coordinator: coordinator)
+                        case .language:
+                            LanguageSection(settings: settings)
+                        }
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.horizontal, 24)
 
-                Spacer()
-
-                // Footer: current status
+                Divider().opacity(0.15)
                 footer
             }
         }
-        .frame(width: 520, height: 480)
+        .frame(width: 520, height: 520)
         .preferredColorScheme(.dark)
     }
 
-    // MARK: - Subviews
+    // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(white: 0.28), Color(white: 0.18)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(LinearGradient(
+                        colors: [Color(white: 0.28), Color(white: 0.18)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
                     .frame(width: 44, height: 44)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -79,16 +80,16 @@ struct SettingsView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                 Text(statusLabel(for: coordinator.pipelineState))
-                    .font(.system(size: 11, weight: .regular))
+                    .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.5))
                     .animation(.easeInOut, value: coordinator.pipelineState)
             }
             Spacer()
         }
         .padding(.horizontal, 24)
-        .padding(.top, 20)
-        .padding(.bottom, 16)
     }
+
+    // MARK: - Tab picker
 
     private var tabPicker: some View {
         HStack(spacing: 0) {
@@ -102,16 +103,14 @@ struct SettingsView: View {
                         Text(tab.label)
                             .font(.system(size: 12, weight: .medium))
                     }
-                    .padding(.vertical, 7)
-                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(selectedTab == tab
-                                  ? Color.white.opacity(0.14)
-                                  : Color.clear)
+                            .fill(selectedTab == tab ? Color.white.opacity(0.14) : Color.clear)
                     )
                     .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.45))
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -127,12 +126,14 @@ struct SettingsView: View {
         )
     }
 
+    // MARK: - Footer
+
     private var footer: some View {
         HStack {
             Circle()
-                .fill(dotColor(for: coordinator.pipelineState))
+                .fill(micColor(for: coordinator.pipelineState))
                 .frame(width: 7, height: 7)
-                .shadow(color: dotColor(for: coordinator.pipelineState).opacity(0.8), radius: 4)
+                .shadow(color: micColor(for: coordinator.pipelineState).opacity(0.8), radius: 4)
             Text(statusLabel(for: coordinator.pipelineState))
                 .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.4))
@@ -142,7 +143,7 @@ struct SettingsView: View {
                 .foregroundStyle(.white.opacity(0.2))
         }
         .padding(.horizontal, 24)
-        .padding(.bottom, 16)
+        .padding(.vertical, 12)
     }
 
     // MARK: - Helpers
@@ -160,7 +161,7 @@ struct SettingsView: View {
 
     private func micColor(for state: PipelineState) -> Color {
         switch state {
-        case .idle:         return .white.opacity(0.7)
+        case .idle:         return .white.opacity(0.6)
         case .loadingModel: return .orange
         case .recording:    return .red
         case .transcribing: return .blue
@@ -168,8 +169,6 @@ struct SettingsView: View {
         case .error:        return .orange
         }
     }
-
-    private func dotColor(for state: PipelineState) -> Color { micColor(for: state) }
 
     private func statusLabel(for state: PipelineState) -> String {
         switch state {
@@ -186,25 +185,21 @@ struct SettingsView: View {
 // MARK: - Tab enum
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case hotkey  = "hotkey"
-    case model   = "model"
-    case language = "language"
-
+    case hotkey, model, language
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .hotkey:   return "Raccourci"
-        case .model:    return "Modèle"
-        case .language: return "Langue"
+        case .hotkey:    return "Raccourci"
+        case .model:     return "Modèle"
+        case .language:  return "Langue"
         }
     }
-
     var icon: String {
         switch self {
-        case .hotkey:   return "keyboard"
-        case .model:    return "cube.box.fill"
-        case .language: return "globe"
+        case .hotkey:    return "keyboard"
+        case .model:     return "cube.box.fill"
+        case .language:  return "globe"
         }
     }
 }
@@ -216,14 +211,14 @@ struct VisualEffectView: NSViewRepresentable {
     var blendingMode: NSVisualEffectView.BlendingMode
 
     func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blendingMode
-        view.state = .active
-        return view
+        let v = NSVisualEffectView()
+        v.material = material
+        v.blendingMode = blendingMode
+        v.state = .active
+        return v
     }
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-        nsView.blendingMode = blendingMode
+    func updateNSView(_ v: NSVisualEffectView, context: Context) {
+        v.material = material
+        v.blendingMode = blendingMode
     }
 }
