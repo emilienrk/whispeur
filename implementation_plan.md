@@ -12,7 +12,7 @@
 > **Gestion de la RAM (Lazy Loading & Cache TTL)**
 > L'application doit être extrêmement légère. Le modèle Whisper (`.bin`) ne doit **jamais** être chargé en mémoire au lancement de l'application.
 > - **Chargement :** Uniquement déclenché au moment où l'utilisateur commence à enregistrer (appui sur le raccourci).
-> - **Déchargement :** Le modèle doit être supprimé de la RAM au bout de **60 secondes maximum** d'inactivité (0s est même acceptable).
+> - **Déchargement immédiat :** Le modèle doit être impérativement purgé de la RAM instantanément (0 seconde) dès que la transcription est terminée.
 > Ce compromis sacrifie ~1 seconde de latence sur le premier enregistrement pour économiser plusieurs gigaoctets de RAM en permanence.
 
 ---
