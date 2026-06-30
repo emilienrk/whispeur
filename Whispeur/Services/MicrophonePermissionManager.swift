@@ -29,12 +29,13 @@ enum MicrophonePermissionStatus: Equatable {
 /// Doit être instancié et utilisé sur le `@MainActor` (généralement dans l'`AppDelegate`
 /// ou dans un `@Observable` ViewModel d'application).
 @MainActor
-final class MicrophonePermissionManager: ObservableObject {
+@Observable
+final class MicrophonePermissionManager {
 
     // MARK: - État observable
 
     /// Statut courant de la permission microphone.
-    @Published private(set) var status: MicrophonePermissionStatus = .undetermined
+    private(set) var status: MicrophonePermissionStatus = .undetermined
 
     // MARK: - Initialisation
 

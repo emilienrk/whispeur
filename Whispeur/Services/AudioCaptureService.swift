@@ -67,15 +67,16 @@ private let kWhisperAudioFormat = AVAudioFormat(
 /// Ce service est `@MainActor` pour que ses propriétés observables mettent à jour
 /// l'UI correctement. La conversion audio est isolée dans une closure d'arrière-plan.
 @MainActor
-final class AudioCaptureService: ObservableObject {
+@Observable
+final class AudioCaptureService {
 
     // MARK: - Propriétés observables
 
     /// État courant de l'enregistrement.
-    @Published private(set) var state: RecordingState = .idle
+    private(set) var state: RecordingState = .idle
 
     /// Erreur éventuelle survenue lors de la capture.
-    @Published private(set) var lastError: AudioCaptureError?
+    private(set) var lastError: AudioCaptureError?
 
     // MARK: - Format cible Whisper (accès public)
 

@@ -2,7 +2,7 @@ name: Whispeur
 options:
   bundleIdPrefix: com.whispeur
   deploymentTarget:
-    macOS: "13.0"
+    macOS: "14.0"
 
 targets:
   Whispeur:
