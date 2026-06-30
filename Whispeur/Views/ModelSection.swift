@@ -2,6 +2,7 @@
 // Whispeur
 //
 // Settings tab: model selection + download with progress bar.
+// The ScrollView is now managed by the parent SettingsView — no inner scroll here.
 
 import SwiftUI
 
@@ -19,39 +20,54 @@ struct ModelSection: View {
             SettingsCard {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionHeader(icon: "cube.box.fill", title: "Modèle Whisper")
+                    HStack(spacing: 6) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.yellow.opacity(0.7))
+                        Text("Marquez jusqu'à \(AppSettings.maxFavorites) modèles en favori pour un accès rapide depuis la barre de menu.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.3))
+                    }
                     Text("Stockés dans ~/Library/Application Support/Whispeur/Models/")
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(.white.opacity(0.2))
                 }
             }
 
-            // Scrollable model list
-            ScrollView {
-                LazyVStack(spacing: 6) {
-                    ForEach(catalog) { model in
-                        ModelRow(
-                            model: model,
-                            downloadState: manager.state(for: model),
-                            isSelected: settings.selectedModelFilename == model.filename,
-                            onSelect: {
-                                settings.selectedModelFilename = model.filename
-                                coordinator.modelURL = model.localURL
-                            },
-                            onDownload: { manager.download(model) },
-                            onCancel:   { manager.cancel(model) },
-                            onDelete:   {
-                                if settings.selectedModelFilename == model.filename {
-                                    settings.selectedModelFilename = ""
-                                    coordinator.modelURL = nil
-                                }
-                                manager.delete(model)
+            // Model list — no inner ScrollView, parent handles scrolling
+            LazyVStack(spacing: 6) {
+                ForEach(catalog) { model in
+                    ModelRow(
+                        model: model,
+                        downloadState: manager.state(for: model),
+                        isSelected: settings.selectedModelFilename == model.filename,
+                        isFavorite: settings.isFavorite(filename: model.filename),
+                        canFavorite: settings.favoritedModelFilenames.count < AppSettings.maxFavorites
+                                  || settings.isFavorite(filename: model.filename),
+                        onSelect: {
+                            settings.selectedModelFilename = model.filename
+                            coordinator.modelURL = model.localURL
+                        },
+                        onToggleFavorite: {
+                            settings.toggleFavorite(filename: model.filename)
+                        },
+                        onDownload: { manager.download(model) },
+                        onCancel:   { manager.cancel(model) },
+                        onDelete:   {
+                            if settings.selectedModelFilename == model.filename {
+                                settings.selectedModelFilename = ""
+                                coordinator.modelURL = nil
                             }
-                        )
-                    }
+                            // Also remove from favorites if deleted
+                            if settings.isFavorite(filename: model.filename) {
+                                settings.toggleFavorite(filename: model.filename)
+                            }
+                            manager.delete(model)
+                        }
+                    )
                 }
-                .padding(.bottom, 6)
             }
-            .frame(maxHeight: 310)
+            .padding(.bottom, 6)
         }
     }
 }
@@ -62,10 +78,13 @@ private struct ModelRow: View {
     let model: WhisperModelDescriptor
     let downloadState: ModelDownloadState
     let isSelected: Bool
-    let onSelect:   () -> Void
-    let onDownload: () -> Void
-    let onCancel:   () -> Void
-    let onDelete:   () -> Void
+    let isFavorite: Bool
+    let canFavorite: Bool
+    let onSelect:        () -> Void
+    let onToggleFavorite: () -> Void
+    let onDownload:      () -> Void
+    let onCancel:        () -> Void
+    let onDelete:        () -> Void
 
     private var isDownloaded: Bool {
         if case .done = downloadState { return true }
@@ -100,6 +119,19 @@ private struct ModelRow: View {
                 }
 
                 Spacer()
+
+                // Favorite button (only when downloaded)
+                if isDownloaded {
+                    Button(action: onToggleFavorite) {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .font(.system(size: 13))
+                            .foregroundStyle(isFavorite ? .yellow : .white.opacity(canFavorite ? 0.25 : 0.1))
+                    }
+                    .buttonStyle(.plain)
+                    .help(isFavorite ? "Retirer des favoris" : canFavorite ? "Ajouter aux favoris" : "Maximum \(AppSettings.maxFavorites) favoris")
+                    .disabled(!canFavorite && !isFavorite)
+                    .animation(.spring(duration: 0.25), value: isFavorite)
+                }
 
                 // Action area (right side)
                 trailingAction

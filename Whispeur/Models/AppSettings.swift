@@ -63,6 +63,35 @@ final class AppSettings {
         set { _autoPasteEnabled = newValue }
     }
 
+    // MARK: - Favoris de modèles (max 4)
+
+    static let maxFavorites = 4
+
+    var favoritedModelFilenames: [String] {
+        get { _favoritedModelFilenames }
+        set { _favoritedModelFilenames = newValue }
+    }
+
+    func toggleFavorite(filename: String) {
+        var current = favoritedModelFilenames
+        if let idx = current.firstIndex(of: filename) {
+            current.remove(at: idx)
+        } else if current.count < AppSettings.maxFavorites {
+            current.append(filename)
+        }
+        favoritedModelFilenames = current
+    }
+
+    func isFavorite(filename: String) -> Bool {
+        favoritedModelFilenames.contains(filename)
+    }
+
+    var favoritedModelDescriptors: [WhisperModelDescriptor] {
+        favoritedModelFilenames.compactMap { fn in
+            WhisperModelDescriptor.catalog.first { $0.filename == fn }
+        }
+    }
+
     // MARK: - Private storage (UserDefaults-backed)
 
     private var _hotKeyCode: Int {
@@ -91,6 +120,17 @@ final class AppSettings {
             return stored as? Bool ?? true
         }
         set { UserDefaults.standard.set(newValue, forKey: "autoPaste") }
+    }
+    private var _favoritedModelFilenames: [String] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: "favoritedModels"),
+                  let arr = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+            return arr
+        }
+        set {
+            let data = try? JSONEncoder().encode(newValue)
+            UserDefaults.standard.set(data, forKey: "favoritedModels")
+        }
     }
 
     // MARK: - Derived helpers

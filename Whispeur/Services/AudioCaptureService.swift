@@ -4,7 +4,7 @@
 // Audio capture engine using AVAudioEngine.
 // Converts input to 16kHz Mono Float32 in memory.
 
-import AVFoundation
+@preconcurrency import AVFoundation
 import Foundation
 
 enum AudioCaptureError: Error, LocalizedError {
@@ -123,14 +123,16 @@ final class AudioCaptureService {
         ) else { return }
 
         var conversionError: NSError?
-        var inputProvided = false
+        // Use a reference-type box so the @Sendable closure can mutate it
+        // without Swift 6 raising a captured-var warning.
+        let provided = InputProvidedBox()
 
-        let status = converter.convert(to: outputBuffer, error: &conversionError) { _, outStatus in
-            if inputProvided {
+        let status = converter.convert(to: outputBuffer, error: &conversionError) { [inputBuffer] _, outStatus in
+            if provided.value {
                 outStatus.pointee = .noDataNow
                 return nil
             }
-            inputProvided = true
+            provided.value = true
             outStatus.pointee = .haveData
             return inputBuffer
         }
@@ -152,4 +154,10 @@ extension AudioCaptureService {
     var recordedDuration: Double {
         Double(sampleBuffer.count) / kWhisperAudioFormat.sampleRate
     }
+}
+
+/// Simple reference-type boolean box used to share mutable state
+/// with a @Sendable converter callback without triggering Swift 6 warnings.
+private final class InputProvidedBox: @unchecked Sendable {
+    var value: Bool = false
 }

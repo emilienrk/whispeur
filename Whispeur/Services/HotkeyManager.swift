@@ -12,6 +12,7 @@
 //   needed by the callback. Updated only on MainActor, before tap starts.
 //   This is safe but not statically verified → nonisolated(unsafe).
 
+@preconcurrency import CoreFoundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
@@ -94,11 +95,14 @@ final class HotkeyManager {
     var onKeyUp:   (@MainActor () -> Void)?
 
     // MARK: - Tap infrastructure
-
-    /// State shared with the tap thread. Only mutated on MainActor (tap must be off).
+    // These fields are accessed from nonisolated contexts (deinit + CGEventTap callback thread).
+    // They are only mutated on the MainActor while the tap is stopped — safe but not statically verified.
     nonisolated(unsafe) private var tapState = TapSharedState()
     nonisolated(unsafe) private var runLoopSource: CFRunLoopSource?
     nonisolated(unsafe) private var runLoopThread: Thread?
+
+    // MARK: - Accessibility polling
+    private var accessibilityPollTask: Task<Void, Never>?
 
     // MARK: - Init / Deinit
 
@@ -127,6 +131,29 @@ final class HotkeyManager {
     func openAccessibilityPreferences() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         NSWorkspace.shared.open(url)
+    }
+
+    /// Poll every 2 seconds until permission is granted, then start listening.
+    func startPollingAccessibility() {
+        guard accessibilityPollTask == nil else { return }
+        accessibilityPollTask = Task { [weak self] in
+            while true {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self else { return }
+                let trusted = AXIsProcessTrusted()
+                self.hasAccessibilityPermission = trusted
+                if trusted {
+                    if !self.isListening { self.startListening() }
+                    break
+                }
+            }
+            self?.accessibilityPollTask = nil
+        }
+    }
+
+    func stopPollingAccessibility() {
+        accessibilityPollTask?.cancel()
+        accessibilityPollTask = nil
     }
 
     func startListening() {
@@ -184,8 +211,10 @@ final class HotkeyManager {
         let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         runLoopSource = src
 
-        let thread = Thread { [src] in
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), src, .commonModes)
+        // Capture src as nonisolated(unsafe) to satisfy Swift 6 Sendable check.
+        nonisolated(unsafe) let srcForThread: CFRunLoopSource = src!
+        let thread = Thread {
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), srcForThread, .commonModes)
             CFRunLoopRun()
         }
         thread.name = "com.whispeur.hotkeyrunloop"
@@ -232,13 +261,32 @@ final class HotkeyManager {
         }
 
         // Check modifier flags.
+        // Special case: if the hotkey IS a modifier key (e.g. Right Option, keyCode 61),
+        // macOS automatically sets maskAlternate in the event flags, so we must
+        // ignore that flag from the event when the hotkey keyCode corresponds to a modifier.
         let relevantMask = CGEventFlags.maskControl.rawValue
                          | CGEventFlags.maskAlternate.rawValue
                          | CGEventFlags.maskShift.rawValue
                          | CGEventFlags.maskCommand.rawValue
-        let strippedFlags   = CGEventFlags(rawValue: event.flags.rawValue & relevantMask)
-        let targetModifiers = CGEventFlags(rawValue: UInt64(tapState.hotKey.modifiers))
-        guard strippedFlags == targetModifiers else {
+        var eventFlagsRaw = event.flags.rawValue & relevantMask
+        let targetModifiersRaw = UInt64(tapState.hotKey.modifiers)
+
+        // If the hotkey is a lone modifier key, strip its own flag from the event flags
+        // because the key itself contributes its own flag while pressed.
+        let modifierKeyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62] // Cmd, Shift, Ctrl, Option variants
+        if modifierKeyCodes.contains(eventKeyCode) {
+            // Strip the flag that corresponds to the physical key being pressed.
+            // For Right Option (61) / Left Option (58): strip maskAlternate
+            if eventKeyCode == 58 || eventKeyCode == 61 { eventFlagsRaw &= ~CGEventFlags.maskAlternate.rawValue }
+            // For Right Cmd (54) / Left Cmd (55): strip maskCommand
+            if eventKeyCode == 54 || eventKeyCode == 55 { eventFlagsRaw &= ~CGEventFlags.maskCommand.rawValue }
+            // For Right Shift (60) / Left Shift (56): strip maskShift
+            if eventKeyCode == 56 || eventKeyCode == 60 { eventFlagsRaw &= ~CGEventFlags.maskShift.rawValue }
+            // For Right Ctrl (62) / Left Ctrl (59): strip maskControl
+            if eventKeyCode == 59 || eventKeyCode == 62 { eventFlagsRaw &= ~CGEventFlags.maskControl.rawValue }
+        }
+
+        guard eventFlagsRaw == targetModifiersRaw else {
             return Unmanaged.passUnretained(event)
         }
 

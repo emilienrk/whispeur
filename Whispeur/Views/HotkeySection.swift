@@ -80,38 +80,129 @@ struct HotkeySection: View {
             }
 
             // MARK: - Accessibility status
-            SettingsCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionHeader(icon: "hand.raised.fill", title: "Permissions")
+            AccessibilityPermissionCard(hotkeyManager: hotkeyManager)
+        }
+    }
+}
 
-                    HStack {
-                        Image(systemName: hotkeyManager.hasAccessibilityPermission
-                              ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundStyle(hotkeyManager.hasAccessibilityPermission
-                                             ? .green : .orange)
-                        Text("Accessibilité")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.white.opacity(0.8))
+// MARK: - Accessibility permission card
+
+private struct AccessibilityPermissionCard: View {
+    let hotkeyManager: HotkeyManager
+
+    var isGranted: Bool { hotkeyManager.hasAccessibilityPermission }
+
+    var body: some View {
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(icon: "hand.raised.fill", title: "Permissions")
+
+                if isGranted {
+                    // Granted state — compact green badge
+                    HStack(spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.green.opacity(0.15))
+                                .frame(width: 34, height: 34)
+                            Image(systemName: "checkmark.shield.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(.green)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Accessibilité accordée")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.9))
+                            Text("Le collage automatique est actif.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
                         Spacer()
-                        if !hotkeyManager.hasAccessibilityPermission {
-                            Button("Ouvrir les réglages") {
-                                hotkeyManager.openAccessibilityPreferences()
+                        // Small green dot
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 7, height: 7)
+                            .shadow(color: .green.opacity(0.6), radius: 4)
+                    }
+                    .frame(minHeight: 44)
+                } else {
+                    // Not granted — prominent call-to-action
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.orange.opacity(0.15))
+                                    .frame(width: 34, height: 34)
+                                Image(systemName: "exclamationmark.shield.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.orange)
                             }
-                            .font(.system(size: 11))
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.blue.opacity(0.8))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Accessibilité requise")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                Text("Sans cette permission, Whispeur ne peut pas simuler ⌘V.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.4))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                        }
+
+                        Button {
+                            hotkeyManager.openAccessibilityPreferences()
+                            hotkeyManager.startPollingAccessibility()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.up.right.square")
+                                    .font(.system(size: 12))
+                                Text("Ouvrir Confidentialité & Sécurité")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 9)
                             .background(
-                                Capsule().fill(Color.blue.opacity(0.1))
-                                    .overlay(Capsule().strokeBorder(Color.blue.opacity(0.2), lineWidth: 1))
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.25)],
+                                            startPoint: .topLeading, endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                            .strokeBorder(Color.orange.opacity(0.3), lineWidth: 1)
+                                    )
                             )
                         }
+                        .buttonStyle(.plain)
+
+                        // Polling indicator
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .scaleEffect(0.55)
+                            Text("En attente de votre autorisation…")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white.opacity(0.3))
+                        }
                     }
-                    .frame(minHeight: 36)
+                    .frame(minHeight: 44)
                 }
             }
         }
+        .onAppear {
+            hotkeyManager.checkAccessibilityPermission()
+            if !hotkeyManager.hasAccessibilityPermission {
+                hotkeyManager.startPollingAccessibility()
+            }
+        }
+        .onDisappear {
+            // Stop polling only if permission was not yet granted
+            if !hotkeyManager.hasAccessibilityPermission {
+                hotkeyManager.stopPollingAccessibility()
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: isGranted)
     }
 }
 
@@ -163,7 +254,9 @@ private struct ModeRow: View {
 struct HotKeyRecorder: View {
     @Binding var hotKey: HotKey
     @State private var isRecording = false
-    @State private var monitor: Any?
+    @State private var localMonitor: Any?
+    @State private var globalMonitor: Any?
+    @State private var flagsMonitor: Any?
 
     var body: some View {
         Button(action: toggleRecording) {
@@ -212,29 +305,62 @@ struct HotKeyRecorder: View {
 
     private func startRecording() {
         isRecording = true
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
-            // Escape cancels without saving.
-            if event.keyCode == 53 {
+
+        // Local monitor: captures regular key presses
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 { // Escape cancels
                 stopRecording()
                 return nil
             }
-            let relevantNS: NSEvent.ModifierFlags = [.control, .option, .shift, .command]
-            let maskedNS = event.modifierFlags.intersection(relevantNS)
-            // Convert NSEvent.ModifierFlags → CGEventFlags raw value for storage.
-            var cgRaw: UInt64 = 0
-            if maskedNS.contains(.control) { cgRaw |= CGEventFlags.maskControl.rawValue }
-            if maskedNS.contains(.option)  { cgRaw |= CGEventFlags.maskAlternate.rawValue }
-            if maskedNS.contains(.shift)   { cgRaw |= CGEventFlags.maskShift.rawValue }
-            if maskedNS.contains(.command) { cgRaw |= CGEventFlags.maskCommand.rawValue }
+            captureKey(keyCode: Int(event.keyCode), nsFlags: event.modifierFlags)
+            return nil
+        }
 
-            hotKey = HotKey(keyCode: Int(event.keyCode), modifiers: Int(cgRaw))
-            stopRecording()
+        // Flags monitor: captures modifier-only keys (Option, Cmd, Shift, Ctrl)
+        // This fires when a modifier key is pressed/released.
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            let kc = Int(event.keyCode)
+            let modifierOnlyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62]
+            guard modifierOnlyCodes.contains(kc) else { return event }
+
+            // Detect key-down phase: flags contain the key's own flag
+            let flags = event.modifierFlags
+            let isKeyDown: Bool
+            switch kc {
+            case 58, 61: isKeyDown = flags.contains(.option)
+            case 54, 55: isKeyDown = flags.contains(.command)
+            case 56, 60: isKeyDown = flags.contains(.shift)
+            case 57:     isKeyDown = flags.contains(.capsLock)
+            case 59, 62: isKeyDown = flags.contains(.control)
+            default:     isKeyDown = false
+            }
+
+            if isKeyDown {
+                // For modifier-only hotkeys, store with NO extra modifiers
+                // (the modifier IS the key, not an additional modifier)
+                hotKey = HotKey(keyCode: kc, modifiers: 0)
+                stopRecording()
+            }
             return nil
         }
     }
 
+    private func captureKey(keyCode: Int, nsFlags: NSEvent.ModifierFlags) {
+        let relevantNS: NSEvent.ModifierFlags = [.control, .option, .shift, .command]
+        let maskedNS = nsFlags.intersection(relevantNS)
+        var cgRaw: UInt64 = 0
+        if maskedNS.contains(.control) { cgRaw |= CGEventFlags.maskControl.rawValue }
+        if maskedNS.contains(.option)  { cgRaw |= CGEventFlags.maskAlternate.rawValue }
+        if maskedNS.contains(.shift)   { cgRaw |= CGEventFlags.maskShift.rawValue }
+        if maskedNS.contains(.command) { cgRaw |= CGEventFlags.maskCommand.rawValue }
+        hotKey = HotKey(keyCode: keyCode, modifiers: Int(cgRaw))
+        stopRecording()
+    }
+
     private func stopRecording() {
         isRecording = false
-        if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+        if let m = localMonitor  { NSEvent.removeMonitor(m); localMonitor = nil }
+        if let m = flagsMonitor  { NSEvent.removeMonitor(m); flagsMonitor = nil }
+        if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
     }
 }

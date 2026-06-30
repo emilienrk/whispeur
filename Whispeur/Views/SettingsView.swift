@@ -2,6 +2,8 @@
 // Whispeur
 //
 // Main settings window: glassmorphism background, 3 sections.
+// Header + tab picker are sticky (outside the ScrollView).
+// A single ScrollView wraps all tab content.
 
 import SwiftUI
 import AppKit
@@ -20,16 +22,20 @@ struct SettingsView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // ── Sticky header ──────────────────────────────────────────
                 header
                     .padding(.top, 12)
 
+                // ── Sticky tab picker ──────────────────────────────────────
                 tabPicker
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 10)
 
-                // Scrollable tab content
+                Divider().opacity(0.1)
+
+                // ── Single scrollable area ─────────────────────────────────
                 ScrollView(.vertical, showsIndicators: false) {
-                    ZStack {
+                    VStack {
                         switch selectedTab {
                         case .hotkey:
                             HotkeySection(
@@ -43,14 +49,16 @@ struct SettingsView: View {
                         }
                     }
                     .padding(.horizontal, 24)
+                    .padding(.top, 14)
                     .padding(.bottom, 16)
                 }
 
+                // ── Sticky footer ──────────────────────────────────────────
                 Divider().opacity(0.15)
                 footer
             }
         }
-        .frame(width: 520, height: 520)
+        .frame(width: 520, height: 540)
         .preferredColorScheme(.dark)
     }
 
@@ -151,7 +159,7 @@ struct SettingsView: View {
     private func micIcon(for state: PipelineState) -> String {
         switch state {
         case .idle:         return "mic"
-        case .loadingModel: return "mic.badge.ellipsis"
+        case .loadingModel: return "waveform.circle"
         case .recording:    return "mic.fill"
         case .transcribing: return "waveform"
         case .pasting:      return "doc.on.clipboard.fill"

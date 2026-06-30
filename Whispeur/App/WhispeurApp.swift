@@ -45,7 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         applySettings()
 
         // 3. Status bar.
-        statusBar = StatusBarController(coordinator: coordinator)
+        statusBar = StatusBarController(coordinator: coordinator, settings: settings)
 
         // 4. Observe pipeline state → update icon (zero-latency via withObservationTracking).
         observePipelineState()

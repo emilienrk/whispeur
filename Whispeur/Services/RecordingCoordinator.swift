@@ -134,7 +134,7 @@ final class RecordingCoordinator {
         do {
             try await whisperService.loadModel(at: modelURL, language: language)
         } catch {
-            audioCapture.stopRecording()
+            _ = audioCapture.stopRecording()
             setError("Chargement modèle : \(error.localizedDescription)")
             return
         }
