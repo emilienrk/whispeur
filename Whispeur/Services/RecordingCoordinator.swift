@@ -1,0 +1,211 @@
+// RecordingCoordinator.swift
+// Whispeur
+//
+// Orchestrates the full end-to-end pipeline:
+// HotKey pressed → AudioCapture starts + Whisper model loads (parallel)
+//              → HotKey released → Audio stops
+//              → Whisper transcribes
+//              → ClipboardService pastes text
+//              → Whisper model unloaded immediately (0s, as per RAM policy)
+
+import Foundation
+import AppKit
+import os
+
+// MARK: - Pipeline State
+
+enum PipelineState: Equatable {
+    case idle
+    case loadingModel
+    case recording
+    case transcribing
+    case pasting
+    case error(String)
+
+    var isActive: Bool {
+        switch self {
+        case .idle, .error: return false
+        default: return true
+        }
+    }
+}
+
+// MARK: - RecordingCoordinator
+
+@MainActor
+@Observable
+final class RecordingCoordinator {
+
+    // MARK: Observed state
+
+    private(set) var pipelineState: PipelineState = .idle
+    private(set) var lastTranscription: String = ""
+    private(set) var lastError: String?
+
+    // MARK: Services (injected)
+
+    let hotkeyManager: HotkeyManager
+    let audioCapture: AudioCaptureService
+    let whisperService: WhisperService
+    let clipboardService: ClipboardService
+
+    // MARK: Configuration
+
+    /// URL to the ggml model file used for transcription.
+    var modelURL: URL? {
+        didSet { /* Reset loaded state so the model reloads on next use. */ }
+    }
+    var language: WhisperLanguage = .auto
+
+    // MARK: Private
+
+    private let logger = Logger(subsystem: "com.whispeur", category: "RecordingCoordinator")
+    /// Tracks whether a transcription pipeline is already running.
+    private var pipelineTask: Task<Void, Never>?
+
+    // MARK: Init
+
+    init(
+        hotkeyManager: HotkeyManager,
+        audioCapture: AudioCaptureService,
+        whisperService: WhisperService,
+        clipboardService: ClipboardService
+    ) {
+        self.hotkeyManager  = hotkeyManager
+        self.audioCapture   = audioCapture
+        self.whisperService = whisperService
+        self.clipboardService = clipboardService
+
+        configureHotkeyCallbacks()
+    }
+
+    // MARK: - Hotkey wiring
+
+    private func configureHotkeyCallbacks() {
+        hotkeyManager.onKeyDown = { [weak self] in
+            guard let self else { return }
+            self.onHotkeyDown()
+        }
+        hotkeyManager.onKeyUp = { [weak self] in
+            guard let self else { return }
+            self.onHotkeyUp()
+        }
+    }
+
+    // MARK: - Push-to-Talk lifecycle
+
+    func onHotkeyDown() {
+        guard pipelineState == .idle else { return }
+        pipelineTask = Task { await startPipeline() }
+    }
+
+    func onHotkeyUp() {
+        // In Push-to-Talk mode: stop recording when the key is released.
+        // In Toggle mode: onHotkeyUp is never called by HotkeyManager.
+        finishRecording()
+    }
+
+    // MARK: - Toggle lifecycle
+
+    /// Called by HotkeyManager in toggle mode on the second press.
+    func stopToggle() {
+        finishRecording()
+    }
+
+    // MARK: - Pipeline
+
+    /// Phase 1: start audio capture + load Whisper model in parallel.
+    private func startPipeline() async {
+        guard let modelURL else {
+            setError("Aucun modèle Whisper sélectionné.")
+            return
+        }
+
+        // --- Start audio immediately ---
+        do {
+            try audioCapture.startRecording()
+        } catch {
+            setError("Micro : \(error.localizedDescription)")
+            return
+        }
+
+        // --- Load model concurrently while the user speaks ---
+        pipelineState = .loadingModel
+        do {
+            try await whisperService.loadModel(at: modelURL, language: language)
+        } catch {
+            audioCapture.stopRecording()
+            setError("Chargement modèle : \(error.localizedDescription)")
+            return
+        }
+
+        // Model is ready; transition to active recording state.
+        pipelineState = .recording
+        logger.info("Pipeline started — recording…")
+    }
+
+    /// Phase 2: stop audio, transcribe, paste, unload model.
+    private func finishRecording() {
+        guard pipelineState == .recording || pipelineState == .loadingModel else { return }
+
+        let samples = audioCapture.stopRecording()
+        guard !samples.isEmpty else {
+            pipelineState = .idle
+            unloadModel()
+            return
+        }
+
+        // Run phases 2-4 in a Task to keep the UI responsive.
+        Task { await runTranscriptionAndPaste(samples: samples) }
+    }
+
+    private func runTranscriptionAndPaste(samples: [Float]) async {
+        // Phase 2: Transcription
+        pipelineState = .transcribing
+        let text: String
+        do {
+            text = try await whisperService.transcribe(samples: samples)
+        } catch {
+            setError("Transcription : \(error.localizedDescription)")
+            unloadModel()
+            return
+        }
+
+        logger.info("Transcription OK: \(text.prefix(80))")
+
+        // Immediately unload the model — 0s policy.
+        unloadModel()
+
+        guard !text.isEmpty else {
+            pipelineState = .idle
+            return
+        }
+
+        // Phase 3: Paste
+        pipelineState = .pasting
+        lastTranscription = text
+        let result = await clipboardService.copyAndPaste(text)
+        logger.info("Paste result: \(String(describing: result))")
+
+        pipelineState = .idle
+    }
+
+    // MARK: - Helpers
+
+    private func unloadModel() {
+        Task { await whisperService.unloadModel() }
+    }
+
+    private func setError(_ message: String) {
+        lastError = message
+        pipelineState = .error(message)
+        logger.error("Pipeline error: \(message)")
+        // Auto-reset to idle after a short delay so the UI recovers.
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            if case .error = self.pipelineState {
+                self.pipelineState = .idle
+            }
+        }
+    }
+}

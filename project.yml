@@ -49,4 +49,7 @@ targets:
           - "-framework Foundation"
           - "-framework AVFoundation"
           - "-framework AppKit"
+          - "-framework ApplicationServices"
+          - "-framework UserNotifications"
     dependencies: []
+

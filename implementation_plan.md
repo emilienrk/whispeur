@@ -29,15 +29,18 @@
 - `MicrophonePermissionManager.swift` : demande async, lien Préférences Système
 - `WhispeurApp.swift` : permission demandée au lancement
 
-### 🔲 Étape 3 — Raccourci clavier global (HotKey)
-- Écoute d'un raccourci global via `CGEventTap` ou `NSEvent.addGlobalMonitorForEvents`
-- Mode Push-to-Talk et mode Bascule
-- Configurable depuis les Settings
+### ✅ Étape 3 — Raccourci clavier global (HotKey)
+- `HotkeyManager.swift` : `CGEventTap` global sur thread CFRunLoop dédié
+- Modes Push-to-Talk et Toggle implémentés
+- Swift 6 compliant : `TapSharedState` (nonisolated(unsafe)) pour le partage inter-thread
 
-### 🔲 Étape 4 — Colle presse-papier & simulation clavier
-- Copy dans le pasteboard
-- Paste automatique via `CGEvent(keyboardEventSource:virtualKey:keyDown:)` + Cmd+V
-- Vérification `AXIsProcessTrusted()` pour l'accessibilité
+### ✅ Étape 4 — Colle presse-papier & simulation clavier
+- `ClipboardService.swift` : copie NSPasteboard + simulation CGEvent Cmd+V
+- Fallback notification `UNUserNotificationCenter` si Accessibility absent
+- `RecordingCoordinator.swift` : orchestre le flux complet hotkey → audio → whisper → paste
+  - Lazy load du modèle en parallèle de l'audio (latence cachée)
+  - Déchargement immédiat 0s après transcription (politique RAM)
+- `AppDelegate` mis à jour : connecte tous les services au démarrage
 
 ### 🔲 Étape 5 — Interface Settings (SwiftUI)
 - Sélection du raccourci
