@@ -26,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let clipboardService = ClipboardService()
     let settings         = AppSettings.shared
     let historyService   = HistoryService()
+    let micPermissionManager = MicrophonePermissionManager()
 
     private(set) var coordinator: RecordingCoordinator!
     private var statusBar: StatusBarController!
@@ -47,15 +48,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         applySettings()
 
         // 3. Status bar.
-        statusBar = StatusBarController(coordinator: coordinator, settings: settings, historyService: historyService)
+        statusBar = StatusBarController(
+            coordinator: coordinator,
+            settings: settings,
+            historyService: historyService,
+            micPermissionManager: micPermissionManager
+        )
 
         // 4. Observe pipeline state → update icon (zero-latency via withObservationTracking).
         observePipelineState()
 
-        // 5. Microphone permission (non-blocking).
+        // 5. Microphone permission (non-blocking, status observable via micPermissionManager).
         Task { @MainActor in
-            let micPermission = MicrophonePermissionManager()
-            await micPermission.requestIfNeeded()
+            await micPermissionManager.requestIfNeeded()
         }
 
         // 6. Start global hotkey listener.

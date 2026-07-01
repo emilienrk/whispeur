@@ -13,6 +13,8 @@ import AppKit
 struct SettingsView: View {
     @Bindable var settings: AppSettings
     let coordinator: RecordingCoordinator
+    @Bindable var micManager: MicrophonePermissionManager
+    let historyService: HistoryService
 
     @State private var selectedTab: SettingsTab = .hotkey
 
@@ -46,6 +48,11 @@ struct SettingsView: View {
                             ModelSection(settings: settings, coordinator: coordinator)
                         case .language:
                             LanguageSection(settings: settings)
+                        case .permissions:
+                            PermissionsSection(micManager: micManager)
+                        case .history:
+                            HistoryView(historyService: historyService)
+                                .preferredColorScheme(.dark)
                         }
                     }
                     .padding(.horizontal, 24)
@@ -58,7 +65,7 @@ struct SettingsView: View {
                 footer
             }
         }
-        .frame(width: 520, height: 540)
+        .frame(width: 520, height: 580)
         .preferredColorScheme(.dark)
     }
 
@@ -105,13 +112,13 @@ struct SettingsView: View {
                 Button {
                     withAnimation(.spring(duration: 0.25)) { selectedTab = tab }
                 } label: {
-                    HStack(spacing: 6) {
+                    VStack(spacing: 3) {
                         Image(systemName: tab.icon)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 13, weight: .medium))
                         Text(tab.label)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 9, weight: .medium))
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 7)
                     .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -193,21 +200,25 @@ struct SettingsView: View {
 // MARK: - Tab enum
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case hotkey, model, language
+    case hotkey, model, language, permissions, history
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .hotkey:    return "Raccourci"
-        case .model:     return "Modèle"
-        case .language:  return "Langue"
+        case .hotkey:      return "Raccourci"
+        case .model:       return "Modèle"
+        case .language:    return "Langue"
+        case .permissions: return "Permissions"
+        case .history:     return "Historique"
         }
     }
     var icon: String {
         switch self {
-        case .hotkey:    return "keyboard"
-        case .model:     return "cube.box.fill"
-        case .language:  return "globe"
+        case .hotkey:      return "keyboard"
+        case .model:       return "cube.box.fill"
+        case .language:    return "globe"
+        case .permissions: return "lock.shield.fill"
+        case .history:     return "clock.fill"
         }
     }
 }

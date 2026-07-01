@@ -5,3 +5,4 @@ Whispeur.xcodeproj/
 Models/*.bin
 Samples/*.wav
 build/
+*.dmg

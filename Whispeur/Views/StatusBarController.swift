@@ -20,6 +20,7 @@ final class StatusBarController: NSObject {
     private let coordinator: RecordingCoordinator
     private let settings: AppSettings
     private let historyService: HistoryService
+    private let micPermissionManager: MicrophonePermissionManager
 
     // The persistent NSMenu assigned once — content rebuilt in menuWillOpen.
     private let persistentMenu = NSMenu()
@@ -34,10 +35,11 @@ final class StatusBarController: NSObject {
 
     // MARK: - Init
 
-    init(coordinator: RecordingCoordinator, settings: AppSettings = .shared, historyService: HistoryService) {
+    init(coordinator: RecordingCoordinator, settings: AppSettings = .shared, historyService: HistoryService, micPermissionManager: MicrophonePermissionManager) {
         self.coordinator = coordinator
         self.settings = settings
         self.historyService = historyService
+        self.micPermissionManager = micPermissionManager
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
         configureButton()
@@ -252,7 +254,12 @@ final class StatusBarController: NSObject {
         }
 
         let settings = AppSettings.shared
-        let view = SettingsView(settings: settings, coordinator: coordinator)
+        let view = SettingsView(
+            settings: settings,
+            coordinator: coordinator,
+            micManager: micPermissionManager,
+            historyService: historyService
+        )
         let hosting = NSHostingController(rootView: view)
 
         let window = NSWindow(contentViewController: hosting)
