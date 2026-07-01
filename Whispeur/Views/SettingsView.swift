@@ -16,7 +16,15 @@ struct SettingsView: View {
     @Bindable var micManager: MicrophonePermissionManager
     let historyService: HistoryService
 
-    @State private var selectedTab: SettingsTab = .hotkey
+    @State var selectedTab: SettingsTab
+
+    init(settings: AppSettings, coordinator: RecordingCoordinator, micManager: MicrophonePermissionManager, historyService: HistoryService, initialTab: SettingsTab = .hotkey) {
+        self.settings = settings
+        self.coordinator = coordinator
+        self.micManager = micManager
+        self.historyService = historyService
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     var body: some View {
         ZStack {

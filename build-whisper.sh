@@ -22,7 +22,7 @@ cmake "$WHISPER_DIR" \
     -DGGML_METAL_USE_BF16=ON \
     -DGGML_NATIVE=ON \
     -DCMAKE_OSX_ARCHITECTURES=arm64 \
-    -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+    -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0
 
 cmake --build . --config Release -j$(sysctl -n hw.logicalcpu)
 

@@ -5,6 +5,9 @@
 
 import Foundation
 import Observation
+import os
+
+private let logger = Logger(subsystem: "com.whispeur", category: "HistoryService")
 
 @MainActor
 @Observable
@@ -41,13 +44,13 @@ final class HistoryService {
     }
     
     private func loadHistory() {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else { return }
         do {
             let data = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
             items = try decoder.decode([HistoryItem].self, from: data)
         } catch {
-            print("[HistoryService] Failed to load history: \(error)")
+            logger.error("Failed to load history: \(error)")
         }
     }
     
@@ -62,7 +65,7 @@ final class HistoryService {
             
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            print("[HistoryService] Failed to save history: \(error)")
+            logger.error("Failed to save history: \(error)")
         }
     }
 }

@@ -139,7 +139,7 @@ extension ModelManager: URLSessionDownloadDelegate {
         let destination = Self.modelsDirectory.appendingPathComponent(filename)
         do {
             // Remove stale file if present.
-            if FileManager.default.fileExists(atPath: destination.path) {
+            if FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
                 try FileManager.default.removeItem(at: destination)
             }
             try FileManager.default.moveItem(at: location, to: destination)

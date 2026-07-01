@@ -81,14 +81,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardService.autoPasteEnabled = settings.autoPasteEnabled
     }
 
-    /// Reactive observation: called whenever pipelineState changes.
+    /// Reactive observation loop: watches every pipelineState transition.
+    /// Uses withObservationTracking recursively — re-registers after each change
+    /// so no transition (including back to .idle) is ever missed.
     private func observePipelineState() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self._observeNextChange()
+        }
+    }
+
+    private func _observeNextChange() {
         withObservationTracking {
+            // Read the state inside the tracking scope so the system registers the dependency.
             let state = coordinator.pipelineState
             statusBar.updateIcon(for: state)
         } onChange: { [weak self] in
+            // onChange fires on a background thread — hop back to MainActor immediately.
             Task { @MainActor [weak self] in
-                self?.observePipelineState()
+                guard let self else { return }
+                // Apply the new state, then re-register for the next change.
+                self.statusBar.updateIcon(for: self.coordinator.pipelineState)
+                self._observeNextChange()
             }
         }
     }

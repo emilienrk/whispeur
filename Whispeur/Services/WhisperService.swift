@@ -48,7 +48,7 @@ actor WhisperService {
 
     /// Loads a ggml model, replacing the previous one if needed.
     func loadModel(at url: URL, language: WhisperLanguage = .auto) throws {
-        let path = url.path
+        let path = url.path(percentEncoded: false)
         if loadedModelPath == path {
             self.language = language
             return
@@ -100,24 +100,24 @@ actor WhisperService {
         params.offset_ms = 0
         params.no_context = true
         params.single_segment = false
+        params.language = nil  // default: auto-detect
 
+        var result: Int32 = 0
         if let code = language.whisperCode {
-            var result: Int32 = 0
+            // Whisper language code must remain valid for the duration of the call.
+            // We use withCString to pin it on the stack while whisper_full executes.
             code.withCString { cCode in
                 params.language = cCode
                 samples.withUnsafeBufferPointer { buf in
                     result = whisper_full(ctx, params, buf.baseAddress, Int32(buf.count))
                 }
             }
-            if result != 0 { throw WhisperServiceError.transcriptionFailed }
         } else {
-            params.language = nil
-            var result: Int32 = 0
             samples.withUnsafeBufferPointer { buf in
                 result = whisper_full(ctx, params, buf.baseAddress, Int32(buf.count))
             }
-            if result != 0 { throw WhisperServiceError.transcriptionFailed }
         }
+        if result != 0 { throw WhisperServiceError.transcriptionFailed }
 
         return extractTranscription(from: ctx)
     }
@@ -152,13 +152,13 @@ actor WhisperService {
 
         if let base = projectModelsURL {
             let candidate = base.appendingPathComponent("Models/\(filename)")
-            if FileManager.default.fileExists(atPath: candidate.path) {
+            if FileManager.default.fileExists(atPath: candidate.path(percentEncoded: false)) {
                 return candidate
             }
         }
 
         let hardcodedDev = URL(fileURLWithPath: "/Users/emilien/dev/perso/whispeur/Models/\(filename)")
-        if FileManager.default.fileExists(atPath: hardcodedDev.path) {
+        if FileManager.default.fileExists(atPath: hardcodedDev.path(percentEncoded: false)) {
             return hardcodedDev
         }
 

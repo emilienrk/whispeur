@@ -165,10 +165,10 @@ struct HotKeyRecorder: View {
 
     private func startRecording() {
         isRecording = true
+        NSApp.activate()
 
-        // Local monitor: captures regular key presses
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == 53 { // Escape cancels
+            if event.keyCode == 53 {
                 stopRecording()
                 return nil
             }
@@ -176,14 +176,22 @@ struct HotKeyRecorder: View {
             return nil
         }
 
-        // Flags monitor: captures modifier-only keys (Option, Cmd, Shift, Ctrl)
-        // This fires when a modifier key is pressed/released.
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            DispatchQueue.main.async {
+                guard self.isRecording else { return }
+                if event.keyCode == 53 {
+                    self.stopRecording()
+                    return
+                }
+                self.captureKey(keyCode: Int(event.keyCode), nsFlags: event.modifierFlags)
+            }
+        }
+
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             let kc = Int(event.keyCode)
             let modifierOnlyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62]
             guard modifierOnlyCodes.contains(kc) else { return event }
 
-            // Detect key-down phase: flags contain the key's own flag
             let flags = event.modifierFlags
             let isKeyDown: Bool
             switch kc {
@@ -195,13 +203,12 @@ struct HotKeyRecorder: View {
             default:     isKeyDown = false
             }
 
-            if isKeyDown {
-                // For modifier-only hotkeys, store with NO extra modifiers
-                // (the modifier IS the key, not an additional modifier)
+            if !isKeyDown {
+                guard self.isRecording else { return event }
                 hotKey = HotKey(keyCode: kc, modifiers: 0)
                 stopRecording()
             }
-            return nil
+            return event
         }
     }
 
@@ -220,7 +227,7 @@ struct HotKeyRecorder: View {
     private func stopRecording() {
         isRecording = false
         if let m = localMonitor  { NSEvent.removeMonitor(m); localMonitor = nil }
-        if let m = flagsMonitor  { NSEvent.removeMonitor(m); flagsMonitor = nil }
         if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
+        if let m = flagsMonitor  { NSEvent.removeMonitor(m); flagsMonitor = nil }
     }
 }

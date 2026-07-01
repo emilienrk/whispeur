@@ -8,6 +8,9 @@
 
 import AppKit
 import SwiftUI
+import os
+
+private let logger = Logger(subsystem: "com.whispeur", category: "StatusBar")
 
 @MainActor
 final class StatusBarController: NSObject {
@@ -29,9 +32,9 @@ final class StatusBarController: NSObject {
     // The persistent NSMenu assigned once — content rebuilt in menuWillOpen.
     private let persistentMenu = NSMenu()
 
-    // Strong reference to the window delegate to prevent premature deallocation
-    // (NSWindow.delegate is weak, so we must retain it ourselves).
-    private var windowCloseDelegate: WindowCloseDelegate?
+    // Strong references to window delegates (NSWindow.delegate is weak).
+    private var settingsWindowDelegate: WindowCloseDelegate?
+    private var historyWindowDelegate: WindowCloseDelegate?
 
     // MARK: - Init
 
@@ -43,7 +46,7 @@ final class StatusBarController: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
         configureButton()
-        print("[StatusBar] Initialized ✅")
+        logger.info("Initialized ✅")
     }
 
     // MARK: - Button setup
@@ -100,14 +103,13 @@ final class StatusBarController: NSObject {
         // ── Current config (informational, disabled) ──────────────────────
         let hotKeyItem = NSMenuItem(
             title: "Raccourci : \(settings.currentHotKey.displayString)  ·  \(settings.hotKeyMode.displayName)",
-            action: nil,
+            action: #selector(openSettingsToHotkey),
             keyEquivalent: ""
         )
-        hotKeyItem.isEnabled = false
-        hotKeyItem.attributedTitle = NSAttributedString(
-            string: hotKeyItem.title,
-            attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: 11)]
-        )
+        hotKeyItem.target = self
+        hotKeyItem.isEnabled = true
+        // Enlève le texte grisé pour montrer qu'il est cliquable.
+        // hotKeyItem.attributedTitle = NSAttributedString(...)
         menu.addItem(hotKeyItem)
 
         // ── Favorite models ───────────────────────────────────────────────
@@ -192,8 +194,8 @@ final class StatusBarController: NSObject {
             shouldSpin = true
 
         case .pasting:
-            button.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: "Collage…")?.withSymbolConfiguration(config)
-            button.contentTintColor = .systemGreen
+            button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Whispeur")?.withSymbolConfiguration(config)
+            button.contentTintColor = nil
 
         case .error:
             button.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Erreur")?.withSymbolConfiguration(config)
@@ -206,7 +208,8 @@ final class StatusBarController: NSObject {
             baseSpinImage = button.image
             spinAngle = 0
             spinTimer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { [weak self] _ in
-                self?.tickSpin()
+                // Timer.scheduledTimer always fires on the main run loop thread.
+                MainActor.assumeIsolated { self?.tickSpin() }
             }
         }
     }
@@ -233,7 +236,7 @@ final class StatusBarController: NSObject {
     // MARK: - Actions
 
     @objc private func triggerRecording() {
-        print("[StatusBar] triggerRecording() — state: \(coordinator.pipelineState)")
+        logger.debug("triggerRecording() — state: \(String(describing: self.coordinator.pipelineState))")
         switch coordinator.pipelineState {
         case .idle:      coordinator.onHotkeyDown()
         case .recording: coordinator.onHotkeyUp()
@@ -245,15 +248,26 @@ final class StatusBarController: NSObject {
         guard let filename = sender.representedObject as? String,
               let descriptor = WhisperModelDescriptor.catalog.first(where: { $0.filename == filename })
         else { return }
-        print("[StatusBar] Selecting favorite model: \(filename)")
+        logger.debug("Selecting favorite model: \(filename)")
         settings.selectedModelFilename = filename
         coordinator.modelURL = descriptor.localURL
     }
 
     @objc func openSettings() {
+        openSettingsWindow(tab: .hotkey) // Default to hotkey anyway or whatever was last
+    }
+
+    @objc func openSettingsToHotkey() {
+        openSettingsWindow(tab: .hotkey)
+    }
+
+    private func openSettingsWindow(tab: SettingsTab) {
         if let window = settingsWindow {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            // Note: Since SettingsView uses @State for its tab, changing the tab of an already 
+            // open window requires passing a binding or just re-creating the view. 
+            // For simplicity, we just bring it forward. If it's already open, they can click the tab.
             return
         }
 
@@ -262,7 +276,8 @@ final class StatusBarController: NSObject {
             settings: settings,
             coordinator: coordinator,
             micManager: micPermissionManager,
-            historyService: historyService
+            historyService: historyService,
+            initialTab: tab
         )
         let hosting = NSHostingController(rootView: view)
 
@@ -278,14 +293,14 @@ final class StatusBarController: NSObject {
         window.backgroundColor = .clear
         let closeDelegate = WindowCloseDelegate { [weak self] in
             self?.settingsWindow = nil
-            self?.windowCloseDelegate = nil
+            self?.settingsWindowDelegate = nil
         }
-        windowCloseDelegate = closeDelegate
+        settingsWindowDelegate = closeDelegate
         window.delegate = closeDelegate
         settingsWindow = window
 
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
     }
 
     @objc func openHistory() {
@@ -310,17 +325,14 @@ final class StatusBarController: NSObject {
         
         let closeDelegate = WindowCloseDelegate { [weak self] in
             self?.historyWindow = nil
+            self?.historyWindowDelegate = nil
         }
-        // Assuming we need to keep a strong reference if multiple windows are open?
-        // Let's just use the same windowCloseDelegate for history, or just let it close normally.
-        // Actually, we can just retain the delegate if needed, but since we use historyWindow, we can just nil it out.
-        // Swift requires strong ref to NSWindowDelegate if using a custom object.
-        objc_setAssociatedObject(window, "WindowCloseDelegate", closeDelegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        historyWindowDelegate = closeDelegate
         window.delegate = closeDelegate
         historyWindow = window
 
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
     }
 }
 
@@ -329,7 +341,7 @@ final class StatusBarController: NSObject {
 extension StatusBarController: NSMenuDelegate {
     /// Called by macOS just before the menu is displayed — rebuild contents fresh.
     func menuWillOpen(_ menu: NSMenu) {
-        print("[StatusBar] menuWillOpen — rebuilding \(settings.favoritedModelDescriptors.filter(\.isDownloaded).count) favorites")
+        logger.debug("menuWillOpen — rebuilding \(self.settings.favoritedModelDescriptors.filter(\.isDownloaded).count) favorites")
         let fresh = buildMenu()
         menu.removeAllItems()
         // Move items from the temp menu into the persistent menu.

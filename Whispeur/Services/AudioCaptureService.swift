@@ -14,8 +14,9 @@
 @preconcurrency import AVFoundation
 import Foundation
 import os
+import Synchronization
 
-fileprivate let logger = Logger(subsystem: "com.whispeur", category: "AudioCapture")
+private let logger = Logger(subsystem: "com.whispeur", category: "AudioCapture")
 
 enum AudioCaptureError: Error, LocalizedError {
     case permissionDenied
@@ -49,22 +50,19 @@ private let kWhisperAudioFormat = AVAudioFormat(
 
 /// Thread-safe accumulator for realtime audio samples.
 /// Appended on AVFoundation realtime thread, drained on MainActor.
-final class SamplesAccumulator: @unchecked Sendable {
-    private var lock = os_unfair_lock()
-    private var buffer: [Float] = []
+final class SamplesAccumulator: Sendable {
+    private let mutex = Mutex<[Float]>([])
 
     func append(_ samples: [Float]) {
-        os_unfair_lock_lock(&lock)
-        buffer.append(contentsOf: samples)
-        os_unfair_lock_unlock(&lock)
+        mutex.withLock { $0.append(contentsOf: samples) }
     }
 
     func drainAll() -> [Float] {
-        os_unfair_lock_lock(&lock)
-        let result = buffer
-        buffer.removeAll(keepingCapacity: true)
-        os_unfair_lock_unlock(&lock)
-        return result
+        mutex.withLock {
+            let result = $0
+            $0.removeAll(keepingCapacity: true)
+            return result
+        }
     }
 }
 
@@ -87,7 +85,7 @@ final class AudioCaptureService {
 
     func startRecording() throws {
         guard state == .idle else {
-            print("[AudioCapture] startRecording() skipped — already in state: \(state)")
+            logger.debug("startRecording() skipped — already in state: \(String(describing: self.state))")
             return
         }
 
@@ -101,17 +99,17 @@ final class AudioCaptureService {
             try audioEngine.start()
         } catch {
             audioEngine.reset()
-            print("[AudioCapture] Engine start failed: \(error)")
+            logger.error("Engine start failed: \(error)")
             throw AudioCaptureError.engineSetupFailed(error.localizedDescription)
         }
 
         state = .recording
-        print("[AudioCapture] Recording started 🎤")
+        logger.info("Recording started 🎤")
     }
 
     func stopRecording() -> [Float] {
         guard state == .recording else {
-            print("[AudioCapture] stopRecording() skipped — not recording (state=\(state))")
+            logger.debug("stopRecording() skipped — not recording (state=\(String(describing: self.state)))")
             return []
         }
 
@@ -123,7 +121,7 @@ final class AudioCaptureService {
         // Drain accumulated samples on the MainActor (safe).
         let captured = accumulator.drainAll()
         state = .idle
-        print("[AudioCapture] Recording stopped. Captured \(captured.count) samples (\(String(format: "%.2f", Double(captured.count) / 16000.0))s) 🔴")
+        logger.info("Recording stopped — \(captured.count) samples (\(String(format: "%.2f", Double(captured.count) / 16_000.0))s) 🔴")
         return captured
     }
 
@@ -133,14 +131,14 @@ final class AudioCaptureService {
         let nativeFormat = inputNode.outputFormat(forBus: 0)
 
         guard nativeFormat.sampleRate > 0, nativeFormat.channelCount > 0 else {
-            print("[AudioCapture] No audio input available (sampleRate=\(nativeFormat.sampleRate) channels=\(nativeFormat.channelCount))")
+            logger.error("No audio input available (sampleRate=\(nativeFormat.sampleRate) channels=\(nativeFormat.channelCount))")
             throw AudioCaptureError.noInputAvailable
         }
 
-        print("[AudioCapture] Native format: \(nativeFormat.sampleRate)Hz \(nativeFormat.channelCount)ch")
+        logger.debug("Native format: \(nativeFormat.sampleRate)Hz \(nativeFormat.channelCount)ch")
 
         guard let conv = AVAudioConverter(from: nativeFormat, to: Self.whisperFormat) else {
-            print("[AudioCapture] AVAudioConverter init failed")
+            logger.error("AVAudioConverter init failed")
             throw AudioCaptureError.converterSetupFailed
         }
         converter = conv

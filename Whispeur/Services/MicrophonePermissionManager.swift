@@ -6,6 +6,9 @@
 import AVFoundation
 import AppKit
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.whispeur", category: "MicPermission")
 
 enum MicrophonePermissionStatus: Equatable {
     case undetermined
@@ -33,11 +36,11 @@ final class MicrophonePermissionManager {
             return
         }
 
-        let granted = await AVCaptureDevice.requestAccess(for: .audio)
+        let granted = await AVAudioApplication.requestRecordPermission()
         status = granted ? .granted : .denied
     }
 
-    /// Opens System Preferences to the Microphone Privacy pane.
+    /// Opens System Settings to the Microphone Privacy pane.
     func openSystemPreferences() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
             NSWorkspace.shared.open(url)
@@ -47,12 +50,11 @@ final class MicrophonePermissionManager {
     var canRecord: Bool { status == .granted }
 
     static func currentStatus() -> MicrophonePermissionStatus {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .notDetermined: return .undetermined
-        case .authorized:    return .granted
-        case .denied:        return .denied
-        case .restricted:    return .restricted
-        @unknown default:    return .restricted
+        switch AVAudioApplication.shared.recordPermission {
+        case .undetermined: return .undetermined
+        case .granted:      return .granted
+        case .denied:       return .denied
+        @unknown default:   return .restricted
         }
     }
 }
