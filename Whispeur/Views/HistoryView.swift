@@ -16,71 +16,84 @@ struct HistoryView: View {
     }()
     
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 14) {
+            
             // Header
-            HStack {
-                Text("Historique des transcriptions")
-                    .font(.headline)
-                
-                Spacer()
-                
-                Button(role: .destructive) {
-                    historyService.clearAll()
-                } label: {
-                    Label("Effacer tout", systemImage: "trash")
-                }
-                .disabled(historyService.items.isEmpty)
-            }
-            .padding()
-            .background(Color(nsColor: .windowBackgroundColor))
-            
-            Divider()
-            
-            // List
-            if historyService.items.isEmpty {
-                VStack {
+            SettingsCard {
+                HStack {
+                    SectionHeader(icon: "clock.fill", title: "Historique des transcriptions")
+                    
                     Spacer()
-                    Image(systemName: "clock")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary)
-                        .padding(.bottom, 8)
-                    Text("Aucune transcription récente.")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .controlBackgroundColor))
-            } else {
-                List(historyService.items) { item in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(alignment: .top) {
-                            Text(dateFormatter.string(from: item.date))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            Spacer()
-                            
-                            Button {
-                                copyToClipboard(item.text)
-                            } label: {
-                                Image(systemName: "doc.on.doc")
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(.accentColor)
-                            .help("Copier le texte")
+                    
+                    Button {
+                        historyService.clearAll()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11))
+                            Text("Effacer")
+                                .font(.system(size: 11, weight: .medium))
                         }
-                        
-                        Text(item.text)
-                            .font(.body)
-                            .textSelection(.enabled)
+                        .foregroundStyle(historyService.items.isEmpty ? .white.opacity(0.3) : .red)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(historyService.items.isEmpty ? Color.white.opacity(0.05) : Color.red.opacity(0.15))
+                        )
                     }
-                    .padding(.vertical, 4)
+                    .buttonStyle(.plain)
+                    .disabled(historyService.items.isEmpty)
                 }
-                .listStyle(.inset)
-                .background(Color(nsColor: .controlBackgroundColor))
+            }
+            
+            // Content
+            if historyService.items.isEmpty {
+                SettingsCard {
+                    VStack(spacing: 12) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.white.opacity(0.2))
+                        Text("Aucune transcription récente.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 30)
+                }
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(historyService.items) { item in
+                        SettingsCard {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(alignment: .top) {
+                                    Text(dateFormatter.string(from: item.date))
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                    
+                                    Spacer()
+                                    
+                                    Button {
+                                        copyToClipboard(item.text)
+                                    } label: {
+                                        Image(systemName: "doc.on.doc")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.white.opacity(0.5))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Copier le texte")
+                                }
+                                
+                                Text(item.text)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    }
+                }
             }
         }
-        .frame(minWidth: 400, minHeight: 400)
     }
     
     private func copyToClipboard(_ text: String) {

@@ -22,12 +22,12 @@ final class StatusBarController: NSObject {
     private let historyService: HistoryService
     private let micPermissionManager: MicrophonePermissionManager
 
+    private var spinTimer: Timer?
+    private var spinAngle: CGFloat = 0
+    private var baseSpinImage: NSImage?
+
     // The persistent NSMenu assigned once — content rebuilt in menuWillOpen.
     private let persistentMenu = NSMenu()
-
-    // Animation timer for the recording pulse.
-    private var pulseTimer: Timer?
-    private var pulsePhase: Bool = false
 
     // Strong reference to the window delegate to prevent premature deallocation
     // (NSWindow.delegate is weak, so we must retain it ourselves).
@@ -71,22 +71,22 @@ final class StatusBarController: NSObject {
         let triggerAction: Selector?
         switch state {
         case .idle:
-            triggerTitle  = "▶ Démarrer l'enregistrement"
+            triggerTitle  = "Démarrer l'enregistrement"
             triggerAction = #selector(triggerRecording)
         case .loadingModel:
-            triggerTitle  = "⏹ Arrêter (chargement modèle…)"
+            triggerTitle  = "Arrêter l'enregistrement"
             triggerAction = #selector(triggerRecording)
         case .recording:
-            triggerTitle  = "⏹ Arrêter l'enregistrement"
+            triggerTitle  = "Arrêter l'enregistrement"
             triggerAction = #selector(triggerRecording)
         case .transcribing:
-            triggerTitle  = "⏳ Transcription en cours…"
+            triggerTitle  = "Transcription en cours…"
             triggerAction = nil
         case .pasting:
-            triggerTitle  = "📋 Collage en cours…"
+            triggerTitle  = "Collage en cours…"
             triggerAction = nil
         case .error(let msg):
-            triggerTitle  = "⚠️ Erreur : \(msg)"
+            triggerTitle  = "Erreur : \(msg)"
             triggerAction = nil
         }
 
@@ -109,19 +109,6 @@ final class StatusBarController: NSObject {
             attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: 11)]
         )
         menu.addItem(hotKeyItem)
-
-        let modelName = settings.selectedModelDescriptor?.name ?? "Aucun modèle"
-        let modelItem = NSMenuItem(
-            title: "Modèle : \(modelName)",
-            action: nil,
-            keyEquivalent: ""
-        )
-        modelItem.isEnabled = false
-        modelItem.attributedTitle = NSAttributedString(
-            string: modelItem.title,
-            attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: 11)]
-        )
-        menu.addItem(modelItem)
 
         // ── Favorite models ───────────────────────────────────────────────
         let favorites = settings.favoritedModelDescriptors.filter { $0.isDownloaded }
@@ -176,54 +163,71 @@ final class StatusBarController: NSObject {
     // MARK: - State updates (called from coordinator observation)
 
     func updateIcon(for state: PipelineState) {
-        pulseTimer?.invalidate()
-        pulseTimer = nil
         guard let button = statusItem.button else { return }
+
+        spinTimer?.invalidate()
+        spinTimer = nil
+        
+        // Use pointSize and weight to exactly match the Apple Control Center mic icon
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+
+        var shouldSpin = false
 
         switch state {
         case .idle:
-            button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Whispeur")
-            button.image?.isTemplate = true
+            button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Whispeur")?.withSymbolConfiguration(config)
             button.contentTintColor = nil
 
         case .loadingModel:
-            button.image = NSImage(systemSymbolName: "waveform.circle", accessibilityDescription: "Chargement…")
-            button.image?.isTemplate = false
+            button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Enregistrement…")?.withSymbolConfiguration(config)
             button.contentTintColor = .systemOrange
 
         case .recording:
-            button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Enregistrement…")
-            button.image?.isTemplate = false
-            button.contentTintColor = .systemRed
-            startPulse()
+            button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Enregistrement…")?.withSymbolConfiguration(config)
+            button.contentTintColor = .systemOrange
 
         case .transcribing:
-            button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Transcription…")
-            button.image?.isTemplate = false
-            button.contentTintColor = .systemBlue
+            button.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: "Transcription…")?.withSymbolConfiguration(config)
+            button.contentTintColor = nil
+            shouldSpin = true
 
         case .pasting:
-            button.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: "Collage…")
-            button.image?.isTemplate = false
+            button.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: "Collage…")?.withSymbolConfiguration(config)
             button.contentTintColor = .systemGreen
 
         case .error:
-            button.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "Erreur")
-            button.image?.isTemplate = false
-            button.contentTintColor = .systemOrange
+            button.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Erreur")?.withSymbolConfiguration(config)
+            button.contentTintColor = .systemRed
+        }
+        
+        button.image?.isTemplate = (button.contentTintColor == nil)
+        
+        if shouldSpin {
+            baseSpinImage = button.image
+            spinAngle = 0
+            spinTimer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { [weak self] _ in
+                self?.tickSpin()
+            }
         }
     }
 
-    // MARK: - Pulse animation (recording state)
-
-    private func startPulse() {
-        pulseTimer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, let button = self.statusItem.button else { return }
-                self.pulsePhase.toggle()
-                button.contentTintColor = self.pulsePhase ? .systemRed : .systemRed.withAlphaComponent(0.4)
-            }
+    private func tickSpin() {
+        guard let button = statusItem.button, let base = baseSpinImage else { return }
+        spinAngle -= .pi / 15
+        if spinAngle <= -.pi * 2 { spinAngle += .pi * 2 }
+        
+        let size = base.size
+        let img = NSImage(size: size)
+        img.lockFocus()
+        if let ctx = NSGraphicsContext.current?.cgContext {
+            ctx.translateBy(x: size.width / 2, y: size.height / 2)
+            ctx.rotate(by: spinAngle)
+            ctx.translateBy(x: -size.width / 2, y: -size.height / 2)
         }
+        base.draw(at: .zero, from: .zero, operation: .copy, fraction: 1.0)
+        img.unlockFocus()
+        img.isTemplate = base.isTemplate
+        button.image = img
     }
 
     // MARK: - Actions
