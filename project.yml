@@ -24,6 +24,8 @@ targets:
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Automatic
+        ALWAYS_SEARCH_USER_PATHS: "NO"
+        SYMROOT: "$(SRCROOT)/build"
         LIBRARY_SEARCH_PATHS:
           - "$(SRCROOT)/build-whisper/src"
           - "$(SRCROOT)/build-whisper/ggml/src"

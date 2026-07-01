@@ -64,7 +64,6 @@ final class StatusBarController: NSObject {
 
         // ── Status / trigger ─────────────────────────────────────────────
         let state = coordinator.pipelineState
-        let isActive = state == .recording || state == .loadingModel
 
         let triggerTitle: String
         let triggerAction: Selector?
