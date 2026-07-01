@@ -135,7 +135,7 @@ final class RecordingCoordinator {
         // --- Load model concurrently while the user speaks ---
         pipelineState = .loadingModel
         do {
-            try await whisperService.loadModel(at: modelURL, language: language)
+            try await whisperService.loadModel(at: modelURL, language: language, useGPU: AppSettings.shared.useGPU)
         } catch {
             _ = audioCapture.stopRecording()
             setError("Chargement modèle : \(error.localizedDescription)")
@@ -165,9 +165,18 @@ final class RecordingCoordinator {
     private func runTranscriptionAndPaste(samples: [Float]) async {
         // Phase 2: Transcription
         pipelineState = .transcribing
+        let s = AppSettings.shared
+        let engineConfig = WhisperEngineConfig(
+            useBeamSearch: s.useBeamSearch,
+            beamSize: s.beamSize,
+            temperature: Float(s.temperature),
+            noSpeechThreshold: Float(s.noSpeechThreshold),
+            conditionOnPreviousText: s.conditionOnPreviousText,
+            useGPU: s.useGPU
+        )
         let text: String
         do {
-            text = try await whisperService.transcribe(samples: samples)
+            text = try await whisperService.transcribe(samples: samples, config: engineConfig)
         } catch {
             setError("Transcription : \(error.localizedDescription)")
             unloadModel()
@@ -187,7 +196,11 @@ final class RecordingCoordinator {
         // Phase 3: Paste & Save History
         pipelineState = .pasting
         lastTranscription = text
-        
+
+        if AppSettings.shared.confirmationSoundEnabled {
+            NSSound.beep()
+        }
+
         let result = await clipboardService.copyAndPaste(text)
         logger.info("Paste result: \(String(describing: result))")
         

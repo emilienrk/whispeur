@@ -19,7 +19,6 @@ final class StatusBarController: NSObject {
 
     private var statusItem: NSStatusItem
     private var settingsWindow: NSWindow?
-    private var historyWindow: NSWindow?
     private let coordinator: RecordingCoordinator
     private let settings: AppSettings
     private let historyService: HistoryService
@@ -34,7 +33,6 @@ final class StatusBarController: NSObject {
 
     // Strong references to window delegates (NSWindow.delegate is weak).
     private var settingsWindowDelegate: WindowCloseDelegate?
-    private var historyWindowDelegate: WindowCloseDelegate?
 
     // MARK: - Init
 
@@ -130,14 +128,25 @@ final class StatusBarController: NSObject {
 
             for model in favorites {
                 let isActive = settings.selectedModelFilename == model.filename
-                let item = NSMenuItem(
-                    title: model.name + "  ·  \(model.sizeInfo)",
-                    action: #selector(selectFavoriteModel(_:)),
-                    keyEquivalent: ""
-                )
+                let item = NSMenuItem(title: "", action: #selector(selectFavoriteModel(_:)), keyEquivalent: "")
                 item.target = self
                 item.representedObject = model.filename
-                item.state = isActive ? .on : .off  // macOS draws the native ✓ when .on
+                item.state = isActive ? .on : .off
+                
+                let style = NSMutableParagraphStyle()
+                let tabStop = NSTextTab(textAlignment: .right, location: 260)
+                style.tabStops = [tabStop]
+
+                let attrTitle = NSMutableAttributedString(string: "\(model.name)\t\(model.sizeInfo)", attributes: [
+                    .font: NSFont.systemFont(ofSize: 13),
+                    .paragraphStyle: style
+                ])
+                let sizeRange = (attrTitle.string as NSString).range(of: model.sizeInfo)
+                if sizeRange.location != NSNotFound {
+                    attrTitle.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: sizeRange)
+                    attrTitle.addAttribute(.font, value: NSFont.systemFont(ofSize: 12), range: sizeRange)
+                }
+                item.attributedTitle = attrTitle
                 menu.addItem(item)
             }
         }
@@ -147,17 +156,17 @@ final class StatusBarController: NSObject {
         // ── Settings / History / Quit ─────────────────────────────────────
         let historyItem = NSMenuItem(title: "Historique des transcriptions…", action: #selector(openHistory), keyEquivalent: "h")
         historyItem.target = self
+        historyItem.image = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)
         menu.addItem(historyItem)
         
         let settingsItem = NSMenuItem(title: "Paramètres…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
+        settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
         menu.addItem(settingsItem)
 
-        menu.addItem(NSMenuItem(
-            title: "Quitter Whispeur",
-            action: #selector(NSApplication.terminate(_:)),
-            keyEquivalent: "q"
-        ))
+        let quitItem = NSMenuItem(title: "Quitter Whispeur", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quitItem.image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: nil)
+        menu.addItem(quitItem)
 
         return menu
     }
@@ -254,11 +263,11 @@ final class StatusBarController: NSObject {
     }
 
     @objc func openSettings() {
-        openSettingsWindow(tab: .hotkey) // Default to hotkey anyway or whatever was last
+        openSettingsWindow(tab: .general) // Default to general
     }
 
     @objc func openSettingsToHotkey() {
-        openSettingsWindow(tab: .hotkey)
+        openSettingsWindow(tab: .general)
     }
 
     private func openSettingsWindow(tab: SettingsTab) {
@@ -304,35 +313,7 @@ final class StatusBarController: NSObject {
     }
 
     @objc func openHistory() {
-        if let window = historyWindow {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
-        let view = HistoryView(historyService: historyService)
-        let hosting = NSHostingController(rootView: view)
-
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "Historique"
-        window.styleMask = [.titled, .closable, .resizable, .fullSizeContentView]
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
-        window.setContentSize(NSSize(width: 450, height: 500))
-        window.center()
-        window.isReleasedWhenClosed = false
-        window.backgroundColor = .windowBackgroundColor
-        
-        let closeDelegate = WindowCloseDelegate { [weak self] in
-            self?.historyWindow = nil
-            self?.historyWindowDelegate = nil
-        }
-        historyWindowDelegate = closeDelegate
-        window.delegate = closeDelegate
-        historyWindow = window
-
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate()
+        openSettingsWindow(tab: .history)
     }
 }
 

@@ -22,6 +22,26 @@ enum WhisperServiceError: Error, LocalizedError {
     }
 }
 
+// MARK: - Engine configuration (passed from AppSettings, Sendable-safe value type)
+
+struct WhisperEngineConfig: Sendable {
+    var useBeamSearch: Bool
+    var beamSize: Int
+    var temperature: Float
+    var noSpeechThreshold: Float
+    var conditionOnPreviousText: Bool
+    var useGPU: Bool
+
+    static let `default` = WhisperEngineConfig(
+        useBeamSearch: false,
+        beamSize: 5,
+        temperature: 0.0,
+        noSpeechThreshold: 0.6,
+        conditionOnPreviousText: false,
+        useGPU: true
+    )
+}
+
 /// Main actor managing the whisper_context.
 actor WhisperService {
 
@@ -31,6 +51,7 @@ actor WhisperService {
 
     private var language: WhisperLanguage = .auto
     private var loadedModelPath: String?
+    private var loadedWithGPU: Bool = true
 
     init() {}
 
@@ -47,9 +68,10 @@ actor WhisperService {
     }
 
     /// Loads a ggml model, replacing the previous one if needed.
-    func loadModel(at url: URL, language: WhisperLanguage = .auto) throws {
+    func loadModel(at url: URL, language: WhisperLanguage = .auto, useGPU: Bool = true) throws {
         let path = url.path(percentEncoded: false)
-        if loadedModelPath == path {
+        // Reload if path or GPU flag changed.
+        if loadedModelPath == path && loadedWithGPU == useGPU {
             self.language = language
             return
         }
@@ -61,7 +83,7 @@ actor WhisperService {
         _freeContext()
 
         var ctxParams = whisper_context_default_params()
-        ctxParams.use_gpu = true
+        ctxParams.use_gpu = useGPU
         ctxParams.flash_attn = true
 
         guard let newContext = whisper_init_from_file_with_params(path, ctxParams) else {
@@ -70,6 +92,7 @@ actor WhisperService {
 
         context = newContext
         loadedModelPath = path
+        loadedWithGPU = useGPU
         self.language = language
     }
 
@@ -83,29 +106,38 @@ actor WhisperService {
 
     var isModelLoaded: Bool { context != nil }
 
-    /// Transcribes a 16kHz mono Float32 audio buffer.
-    func transcribe(samples: [Float]) throws -> String {
+    /// Transcribes a 16kHz mono Float32 audio buffer using the provided engine config.
+    func transcribe(samples: [Float], config: WhisperEngineConfig = .default) throws -> String {
         guard let ctx = context else { throw WhisperServiceError.noModelLoaded }
 
         // Leave 2 cores free, max 8 to prevent scaling issues.
         let maxThreads = max(1, min(8, ProcessInfo.processInfo.processorCount - 2))
 
-        var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
-        params.print_realtime = false
-        params.print_progress = false
+        let strategy: whisper_sampling_strategy = config.useBeamSearch
+            ? WHISPER_SAMPLING_BEAM_SEARCH
+            : WHISPER_SAMPLING_GREEDY
+
+        var params = whisper_full_default_params(strategy)
+        params.print_realtime   = false
+        params.print_progress   = false
         params.print_timestamps = false
-        params.print_special = false
-        params.translate = false
-        params.n_threads = Int32(maxThreads)
-        params.offset_ms = 0
-        params.no_context = true
-        params.single_segment = false
-        params.language = nil  // default: auto-detect
+        params.print_special    = false
+        params.translate        = false
+        params.n_threads        = Int32(maxThreads)
+        params.offset_ms        = 0
+        params.no_context       = !config.conditionOnPreviousText
+        params.single_segment   = false
+        params.temperature      = config.temperature
+        params.no_speech_thold  = config.noSpeechThreshold
+        params.language         = nil  // overridden below if set
+
+        if config.useBeamSearch {
+            params.beam_search.beam_size = Int32(config.beamSize)
+        }
 
         var result: Int32 = 0
         if let code = language.whisperCode {
             // Whisper language code must remain valid for the duration of the call.
-            // We use withCString to pin it on the stack while whisper_full executes.
             code.withCString { cCode in
                 params.language = cCode
                 samples.withUnsafeBufferPointer { buf in

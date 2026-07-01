@@ -6,6 +6,7 @@
 // Each didSet syncs to UserDefaults for persistence.
 
 import Foundation
+import ServiceManagement
 
 @MainActor
 @Observable
@@ -19,12 +20,21 @@ final class AppSettings {
 
     private init() {
         let ud = UserDefaults.standard
-        hotKeyCode             = (ud.integer(forKey: "hotKeyCode").nonZero) ?? 61
+        // Default hotkey: fn key (63), matching Wispr Flow behavior
+        hotKeyCode             = (ud.integer(forKey: "hotKeyCode").nonZero) ?? 63
         hotKeyModifiers        = ud.integer(forKey: "hotKeyModifiers")
         _hotKeyModeRaw         = ud.string(forKey: "hotKeyMode") ?? HotKeyMode.pushToTalk.rawValue
         selectedModelFilename  = ud.string(forKey: "selectedModel") ?? "ggml-base.bin"
         languageCode           = ud.string(forKey: "language") ?? "auto"
         _autoPasteEnabled      = (ud.object(forKey: "autoPaste") as? Bool) ?? true
+        _launchAtLogin         = (ud.object(forKey: "launchAtLogin") as? Bool) ?? false
+        _confirmationSound     = (ud.object(forKey: "confirmationSound") as? Bool) ?? false
+        _useBeamSearch         = (ud.object(forKey: "useBeamSearch") as? Bool) ?? false
+        _beamSize              = (ud.object(forKey: "beamSize") as? Int) ?? 5
+        _temperature           = (ud.object(forKey: "temperature") as? Double) ?? 0.0
+        _noSpeechThreshold     = (ud.object(forKey: "noSpeechThreshold") as? Double) ?? 0.6
+        _conditionOnPrevious   = (ud.object(forKey: "conditionOnPrevious") as? Bool) ?? false
+        _useGPU                = (ud.object(forKey: "useGPU") as? Bool) ?? true
         if let data = ud.data(forKey: "favoritedModels"),
            let arr  = try? JSONDecoder().decode([String].self, from: data) {
             favoritedModelFilenames = arr
@@ -33,7 +43,7 @@ final class AppSettings {
         }
     }
 
-    // MARK: - Hotkey (stored in-memory, persisted on write)
+    // MARK: - Hotkey
 
     var hotKeyCode: Int {
         didSet { UserDefaults.standard.set(hotKeyCode, forKey: "hotKeyCode") }
@@ -75,7 +85,7 @@ final class AppSettings {
         set { languageCode = newValue.id }
     }
 
-    // MARK: - Auto-paste
+    // MARK: - General settings
 
     private var _autoPasteEnabled: Bool {
         didSet { UserDefaults.standard.set(_autoPasteEnabled, forKey: "autoPaste") }
@@ -85,7 +95,82 @@ final class AppSettings {
         set { _autoPasteEnabled = newValue }
     }
 
-    // MARK: - Favoris de modèles (max 4)
+    private var _launchAtLogin: Bool {
+        didSet {
+            UserDefaults.standard.set(_launchAtLogin, forKey: "launchAtLogin")
+            applyLaunchAtLogin(_launchAtLogin)
+        }
+    }
+    var launchAtLogin: Bool {
+        get { _launchAtLogin }
+        set { _launchAtLogin = newValue }
+    }
+
+    private var _confirmationSound: Bool {
+        didSet { UserDefaults.standard.set(_confirmationSound, forKey: "confirmationSound") }
+    }
+    var confirmationSoundEnabled: Bool {
+        get { _confirmationSound }
+        set { _confirmationSound = newValue }
+    }
+
+    // MARK: - Engine (Whisper params)
+
+    private var _useBeamSearch: Bool {
+        didSet { UserDefaults.standard.set(_useBeamSearch, forKey: "useBeamSearch") }
+    }
+    /// When true, uses WHISPER_SAMPLING_BEAM_SEARCH instead of greedy.
+    var useBeamSearch: Bool {
+        get { _useBeamSearch }
+        set { _useBeamSearch = newValue }
+    }
+
+    private var _beamSize: Int {
+        didSet { UserDefaults.standard.set(_beamSize, forKey: "beamSize") }
+    }
+    /// Number of beams (1–10). Only used when useBeamSearch is true.
+    var beamSize: Int {
+        get { _beamSize }
+        set { _beamSize = min(10, max(1, newValue)) }
+    }
+
+    private var _temperature: Double {
+        didSet { UserDefaults.standard.set(_temperature, forKey: "temperature") }
+    }
+    /// Sampling temperature (0.0 = deterministic, 1.0 = random).
+    var temperature: Double {
+        get { _temperature }
+        set { _temperature = min(1.0, max(0.0, newValue)) }
+    }
+
+    private var _noSpeechThreshold: Double {
+        didSet { UserDefaults.standard.set(_noSpeechThreshold, forKey: "noSpeechThreshold") }
+    }
+    /// Probability threshold to mark a segment as silence and skip it.
+    var noSpeechThreshold: Double {
+        get { _noSpeechThreshold }
+        set { _noSpeechThreshold = min(1.0, max(0.0, newValue)) }
+    }
+
+    private var _conditionOnPrevious: Bool {
+        didSet { UserDefaults.standard.set(_conditionOnPrevious, forKey: "conditionOnPrevious") }
+    }
+    /// Feed previous output as context for next segment (improves coherence on long sessions).
+    var conditionOnPreviousText: Bool {
+        get { _conditionOnPrevious }
+        set { _conditionOnPrevious = newValue }
+    }
+
+    private var _useGPU: Bool {
+        didSet { UserDefaults.standard.set(_useGPU, forKey: "useGPU") }
+    }
+    /// Enable Metal GPU acceleration for the Whisper context.
+    var useGPU: Bool {
+        get { _useGPU }
+        set { _useGPU = newValue }
+    }
+
+    // MARK: - Favorited models (max 4)
 
     static let maxFavorites = 4
 
@@ -121,6 +206,20 @@ final class AppSettings {
 
     var currentHotKey: HotKey {
         HotKey(keyCode: hotKeyCode, modifiers: hotKeyModifiers)
+    }
+
+    // MARK: - Private helpers
+
+    private func applyLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            // Non-fatal: the toggle will stay visually set but macOS may deny it.
+        }
     }
 }
 

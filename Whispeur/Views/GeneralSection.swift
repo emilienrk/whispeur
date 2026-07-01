@@ -1,36 +1,16 @@
-// HotkeySection.swift
+// GeneralSection.swift
 // Whispeur
 //
-// Settings tab: hotkey recording and recording mode.
+// Settings tab: general UX preferences.
 
 import SwiftUI
-import AppKit
 
-struct HotkeySection: View {
+struct GeneralSection: View {
     @Bindable var settings: AppSettings
     let hotkeyManager: HotkeyManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-
-            // MARK: - Recording mode
-            SettingsCard {
-                VStack(alignment: .leading, spacing: 14) {
-                    SectionHeader(icon: "record.circle", title: "Mode d'enregistrement")
-                    VStack(spacing: 4) {
-                        ForEach(HotKeyMode.allCases, id: \.self) { mode in
-                            ModeRow(
-                                mode: mode,
-                                isSelected: settings.hotKeyMode == mode,
-                                onSelect: {
-                                    settings.hotKeyMode = mode
-                                    hotkeyManager.setMode(mode)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
 
             // MARK: - Hotkey recorder
             SettingsCard {
@@ -60,9 +40,102 @@ struct HotkeySection: View {
                 }
             }
 
+            // MARK: - Recording mode
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(icon: "record.circle", title: "Mode d'enregistrement")
+                    VStack(spacing: 4) {
+                        ForEach(HotKeyMode.allCases, id: \.self) { mode in
+                            ModeRow(
+                                mode: mode,
+                                isSelected: settings.hotKeyMode == mode,
+                                onSelect: {
+                                    settings.hotKeyMode = mode
+                                    hotkeyManager.setMode(mode)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
+            // MARK: - Dictation behavior
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(icon: "text.bubble.fill", title: "Comportement")
 
+                    SettingsToggleRow(
+                        icon: "doc.on.clipboard.fill",
+                        label: "Coller automatiquement",
+                        description: "Insère le texte directement dans l'app active après la transcription.",
+                        isOn: $settings.autoPasteEnabled
+                    )
+
+                    Divider().opacity(0.08)
+
+                    SettingsToggleRow(
+                        icon: "speaker.wave.2.fill",
+                        label: "Son de confirmation",
+                        description: "Émet un son bref quand la transcription est prête.",
+                        isOn: $settings.confirmationSoundEnabled
+                    )
+                }
+            }
+
+            // MARK: - System
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(icon: "gearshape.2.fill", title: "Système")
+
+                    SettingsToggleRow(
+                        icon: "arrow.up.circle.fill",
+                        label: "Démarrer au login",
+                        description: "Lance Whispeur automatiquement au démarrage de macOS.",
+                        isOn: $settings.launchAtLogin
+                    )
+                }
+            }
         }
+    }
+}
+
+// MARK: - Reusable toggle row
+
+struct SettingsToggleRow: View {
+    let icon: String
+    let label: String
+    let description: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .frame(width: 20)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                Text(description)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .tint(Color.accentColor)
+                .scaleEffect(0.85)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .contentShape(Rectangle())
+        .onTapGesture { isOn.toggle() }
     }
 }
 
@@ -189,7 +262,7 @@ struct HotKeyRecorder: View {
 
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             let kc = Int(event.keyCode)
-            let modifierOnlyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62]
+            let modifierOnlyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
             guard modifierOnlyCodes.contains(kc) else { return event }
 
             let flags = event.modifierFlags
@@ -200,6 +273,7 @@ struct HotKeyRecorder: View {
             case 56, 60: isKeyDown = flags.contains(.shift)
             case 57:     isKeyDown = flags.contains(.capsLock)
             case 59, 62: isKeyDown = flags.contains(.control)
+            case 63:     isKeyDown = flags.contains(.function)
             default:     isKeyDown = false
             }
 

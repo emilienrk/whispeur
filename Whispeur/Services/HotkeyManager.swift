@@ -38,8 +38,8 @@ struct HotKey: Equatable, Sendable, Codable {
         return parts.joined()
     }
 
-    /// Default: Right Option key, no additional modifiers.
-    static let defaultHotKey = HotKey(keyCode: 61, modifiers: 0)
+    /// Default: fn key (63), matching Wispr Flow behavior.
+    static let defaultHotKey = HotKey(keyCode: 63, modifiers: 0)
 
     private static func keyCodeToString(_ keyCode: Int) -> String? {
         let map: [Int: String] = [
@@ -55,7 +55,8 @@ struct HotKey: Equatable, Sendable, Codable {
             88: "6", 89: "7", 91: "8", 92: "9", 96: "F5", 97: "F6", 98: "F7", 99: "F3", 100: "F8", 
             101: "F9", 103: "F11", 105: "F13", 106: "F16", 107: "F14", 109: "F10", 111: "F12", 
             113: "F15", 114: "Help", 115: "Home", 116: "PgUp", 117: "⌦", 118: "F4", 119: "End", 
-            120: "F2", 121: "PgDn", 122: "F1", 123: "←", 124: "→", 125: "↓", 126: "↑"
+            120: "F2", 121: "PgDn", 122: "F1", 123: "←", 124: "→", 125: "↓", 126: "↑",
+            63: "fn"
         ]
         return map[keyCode]
     }
@@ -313,7 +314,7 @@ final class HotkeyManager {
         // Pour les touches de modification utilisées comme touche principale :
         // on soustrait leur propre flag pour ignorer l'auto-modification.
         var isModifierDown = false
-        let modifierKeyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62]
+        let modifierKeyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
         if modifierKeyCodes.contains(eventKeyCode) {
             if eventKeyCode == 58 || eventKeyCode == 61 {
                 isModifierDown = (eventFlagsRaw & CGEventFlags.maskAlternate.rawValue) != 0
@@ -327,6 +328,10 @@ final class HotkeyManager {
             } else if eventKeyCode == 59 || eventKeyCode == 62 {
                 isModifierDown = (eventFlagsRaw & CGEventFlags.maskControl.rawValue) != 0
                 eventFlagsRaw &= ~CGEventFlags.maskControl.rawValue
+            } else if eventKeyCode == 63 {
+                // fn uses maskSecondaryFn; strip it so modifier comparison stays clean.
+                isModifierDown = event.flags.contains(.maskSecondaryFn)
+                eventFlagsRaw &= ~CGEventFlags.maskSecondaryFn.rawValue
             }
         }
 
