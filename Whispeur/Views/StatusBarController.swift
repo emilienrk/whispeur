@@ -28,6 +28,9 @@ final class StatusBarController: NSObject {
     private var spinAngle: CGFloat = 0
     private var baseSpinImage: NSImage?
 
+    private var recordingTimer: Timer?
+    private var recordingStartTime: Date?
+
     // The persistent NSMenu assigned once — content rebuilt in menuWillOpen.
     private let persistentMenu = NSMenu()
 
@@ -41,7 +44,7 @@ final class StatusBarController: NSObject {
         self.settings = settings
         self.historyService = historyService
         self.micPermissionManager = micPermissionManager
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         configureButton()
         logger.info("Initialized ✅")
@@ -178,6 +181,11 @@ final class StatusBarController: NSObject {
 
         spinTimer?.invalidate()
         spinTimer = nil
+
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        
+        button.title = ""
         
         // Use pointSize and weight to exactly match the Apple Control Center mic icon
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
@@ -194,8 +202,14 @@ final class StatusBarController: NSObject {
             button.contentTintColor = .systemOrange
 
         case .recording:
-            button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Enregistrement…")?.withSymbolConfiguration(config)
-            button.contentTintColor = .systemOrange
+            button.image = nil
+            button.title = "0:00"
+            button.contentTintColor = nil
+            
+            recordingStartTime = Date()
+            recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateRecordingTimer() }
+            }
 
         case .transcribing:
             button.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: "Transcription…")?.withSymbolConfiguration(config)
@@ -240,6 +254,20 @@ final class StatusBarController: NSObject {
         img.unlockFocus()
         img.isTemplate = base.isTemplate
         button.image = img
+    }
+    
+    private func updateRecordingTimer() {
+        guard let button = statusItem.button,
+              let startTime = recordingStartTime else { return }
+        
+        let elapsed = Date().timeIntervalSince(startTime)
+        let minutes = Int(elapsed) / 60
+        let seconds = Int(elapsed) % 60
+        
+        // Add monospaced digit font so the text width doesn't jitter
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 13.0, weight: .medium)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        button.attributedTitle = NSAttributedString(string: String(format: "%d:%02d", minutes, seconds), attributes: attributes)
     }
 
     // MARK: - Actions
