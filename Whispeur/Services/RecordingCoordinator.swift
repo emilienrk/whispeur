@@ -63,6 +63,8 @@ final class RecordingCoordinator {
     private let logger = Logger(subsystem: "com.whispeur", category: "RecordingCoordinator")
     /// Tracks whether a transcription pipeline is already running.
     private var pipelineTask: Task<Void, Never>?
+    /// Tracks a pending model unload task.
+    private var unloadTask: Task<Void, Never>?
 
     // MARK: Init
 
@@ -123,6 +125,10 @@ final class RecordingCoordinator {
             setError("Aucun modèle Whisper sélectionné.")
             return
         }
+
+        // Cancel any pending unload so the model stays loaded if we're quick enough.
+        unloadTask?.cancel()
+        unloadTask = nil
 
         // --- Start audio immediately ---
         do {
@@ -185,7 +191,7 @@ final class RecordingCoordinator {
 
         logger.info("Transcription OK: \(text.prefix(80))")
 
-        // Immediately unload the model — 0s policy.
+        // Unload the model after the configured delay.
         unloadModel()
 
         guard !text.isEmpty else {
@@ -213,7 +219,17 @@ final class RecordingCoordinator {
     // MARK: - Helpers
 
     private func unloadModel() {
-        Task { await whisperService.unloadModel() }
+        unloadTask?.cancel()
+        let delay = AppSettings.shared.modelUnloadDelay
+        if delay > 0 {
+            unloadTask = Task {
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled else { return }
+                await whisperService.unloadModel()
+            }
+        } else {
+            unloadTask = Task { await whisperService.unloadModel() }
+        }
     }
 
     private func setError(_ message: String) {

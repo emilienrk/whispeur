@@ -35,6 +35,7 @@ final class AppSettings {
         _noSpeechThreshold     = (ud.object(forKey: "noSpeechThreshold") as? Double) ?? 0.6
         _conditionOnPrevious   = (ud.object(forKey: "conditionOnPrevious") as? Bool) ?? false
         _useGPU                = (ud.object(forKey: "useGPU") as? Bool) ?? true
+        _modelUnloadDelay      = (ud.object(forKey: "modelUnloadDelay") as? Double) ?? 0.0
         if let data = ud.data(forKey: "favoritedModels"),
            let arr  = try? JSONDecoder().decode([String].self, from: data) {
             favoritedModelFilenames = arr
@@ -168,6 +169,15 @@ final class AppSettings {
     var useGPU: Bool {
         get { _useGPU }
         set { _useGPU = newValue }
+    }
+
+    private var _modelUnloadDelay: Double {
+        didSet { UserDefaults.standard.set(_modelUnloadDelay, forKey: "modelUnloadDelay") }
+    }
+    /// Delay in seconds before unloading the model (0 = immediately).
+    var modelUnloadDelay: Double {
+        get { _modelUnloadDelay }
+        set { _modelUnloadDelay = max(0, newValue) }
     }
 
     // MARK: - Favorited models (max 4)

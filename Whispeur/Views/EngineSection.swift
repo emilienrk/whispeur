@@ -134,6 +134,21 @@ struct EngineSection: View {
                         description: "Utilise le GPU Apple Silicon pour accélérer la transcription. Désactiver libère le GPU pour d'autres apps.",
                         isOn: $settings.useGPU
                     )
+                    
+                    Divider().opacity(0.08)
+
+                    EngineSliderRow(
+                        icon: "timer",
+                        label: "Délai de déchargement",
+                        value: $settings.modelUnloadDelay,
+                        range: 0.0...300.0,
+                        lowLabel: "0s",
+                        highLabel: "5 min",
+                        description: "Temps avant de décharger le modèle de la RAM après une dictée. 0s = immédiat.",
+                        format: { val in
+                            val == 0 ? "0s" : (val < 60 ? "\(Int(val))s" : "\(Int(val)/60)m\(Int(val)%60 > 0 ? " \(Int(val)%60)s" : "")")
+                        }
+                    )
 
                     Text("Certains changements prennent effet au prochain enregistrement.")
                         .font(.system(size: 11))
