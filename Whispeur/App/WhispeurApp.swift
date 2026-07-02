@@ -9,81 +9,94 @@ struct WhispeurApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
+        // The native macOS Settings scene — opens with Cmd+, and appears
+        // in the "Whispeur" application menu automatically.
         Settings {
-            EmptyView()
+            NativeSettingsView()
+                .environmentObject(appDelegate.servicesContainer)
         }
     }
 }
 
+// MARK: - Services container
+
+/// Bundles all long-lived services so the native Settings scene can reach them.
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate {
-
-    // MARK: - Services
-
+final class ServicesContainer: ObservableObject {
+    let settings         = AppSettings.shared
+    let historyService   = HistoryService()
+    let micPermManager   = MicrophonePermissionManager()
     let hotkeyManager    = HotkeyManager()
     let audioCapture     = AudioCaptureService()
     let whisperService   = WhisperService()
     let clipboardService = ClipboardService()
-    let settings         = AppSettings.shared
-    let historyService   = HistoryService()
-    let micPermissionManager = MicrophonePermissionManager()
 
-    private(set) var coordinator: RecordingCoordinator!
-    private var statusBar: StatusBarController!
-
-    // MARK: - Lifecycle
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-
-        // 1. Build the coordinator.
-        coordinator = RecordingCoordinator(
+    private(set) lazy var coordinator: RecordingCoordinator = {
+        RecordingCoordinator(
             hotkeyManager: hotkeyManager,
             audioCapture: audioCapture,
             whisperService: whisperService,
             clipboardService: clipboardService,
             historyService: historyService
         )
+    }()
+}
 
-        // 2. Apply stored settings to services.
-        applySettings()
+// MARK: - AppDelegate
 
-        // 3. Status bar.
+@MainActor
+class AppDelegate: NSObject, NSApplicationDelegate {
+
+    let servicesContainer = ServicesContainer()
+
+    private var statusBar: StatusBarController!
+
+    // MARK: - Lifecycle
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let sc = servicesContainer
+
+        // Apply stored settings to services.
+        applySettings(sc)
+
+        // Build the status bar controller.
         statusBar = StatusBarController(
-            coordinator: coordinator,
-            settings: settings,
-            historyService: historyService,
-            micPermissionManager: micPermissionManager
+            coordinator: sc.coordinator,
+            settings: sc.settings,
+            historyService: sc.historyService,
+            micPermissionManager: sc.micPermManager
         )
 
-        // 4. Observe pipeline state → update icon (zero-latency via withObservationTracking).
+        // Observe pipeline state → update icon.
         observePipelineState()
 
-        // 5. Microphone permission (non-blocking, status observable via micPermissionManager).
+        // Microphone permission (non-blocking).
         Task { @MainActor in
-            await micPermissionManager.requestIfNeeded()
+            await sc.micPermManager.requestIfNeeded()
         }
 
-        // 6. Start global hotkey listener.
-        hotkeyManager.startListening()
+        // Start global hotkey listener.
+        sc.hotkeyManager.startListening()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        hotkeyManager.stopListening()
+        servicesContainer.hotkeyManager.stopListening()
     }
 
     // MARK: - Settings → Services sync
 
-    private func applySettings() {
-        hotkeyManager.updateHotKey(settings.currentHotKey)
-        hotkeyManager.setMode(settings.hotKeyMode)
-        coordinator.modelURL = settings.selectedModelURL
-        coordinator.language = settings.selectedLanguage
-        clipboardService.autoPasteEnabled = settings.autoPasteEnabled
+    private func applySettings(_ sc: ServicesContainer) {
+        let s = sc.settings
+        sc.hotkeyManager.updateHotKey(s.currentHotKey)
+        sc.hotkeyManager.setMode(s.hotKeyMode)
+        sc.coordinator.modelURL = s.selectedModelURL
+        sc.coordinator.language = s.selectedLanguage
+        sc.clipboardService.autoPasteEnabled = s.autoPasteEnabled
     }
 
+    // MARK: - Observation loop
+
     /// Reactive observation loop: watches every pipelineState transition.
-    /// Uses withObservationTracking recursively — re-registers after each change
-    /// so no transition (including back to .idle) is ever missed.
     private func observePipelineState() {
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -93,15 +106,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func _observeNextChange() {
         withObservationTracking {
-            // Read the state inside the tracking scope so the system registers the dependency.
-            let state = coordinator.pipelineState
+            let state = servicesContainer.coordinator.pipelineState
             statusBar.updateIcon(for: state)
         } onChange: { [weak self] in
-            // onChange fires on a background thread — hop back to MainActor immediately.
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                // Apply the new state, then re-register for the next change.
-                self.statusBar.updateIcon(for: self.coordinator.pipelineState)
+                self.statusBar.updateIcon(for: self.servicesContainer.coordinator.pipelineState)
                 self._observeNextChange()
             }
         }

@@ -18,7 +18,6 @@ final class StatusBarController: NSObject {
     // MARK: - Properties
 
     private var statusItem: NSStatusItem
-    private var settingsWindow: NSWindow?
     private let coordinator: RecordingCoordinator
     private let settings: AppSettings
     private let historyService: HistoryService
@@ -34,8 +33,6 @@ final class StatusBarController: NSObject {
     // The persistent NSMenu assigned once — content rebuilt in menuWillOpen.
     private let persistentMenu = NSMenu()
 
-    // Strong references to window delegates (NSWindow.delegate is weak).
-    private var settingsWindowDelegate: WindowCloseDelegate?
 
     // MARK: - Init
 
@@ -291,57 +288,20 @@ final class StatusBarController: NSObject {
     }
 
     @objc func openSettings() {
-        openSettingsWindow(tab: .general) // Default to general
+        // Open the native Settings window via the standard AppKit action.
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc func openSettingsToHotkey() {
-        openSettingsWindow(tab: .general)
-    }
-
-    private func openSettingsWindow(tab: SettingsTab) {
-        if let window = settingsWindow {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            // Note: Since SettingsView uses @State for its tab, changing the tab of an already 
-            // open window requires passing a binding or just re-creating the view. 
-            // For simplicity, we just bring it forward. If it's already open, they can click the tab.
-            return
-        }
-
-        let settings = AppSettings.shared
-        let view = SettingsView(
-            settings: settings,
-            coordinator: coordinator,
-            micManager: micPermissionManager,
-            historyService: historyService,
-            initialTab: tab
-        )
-        let hosting = NSHostingController(rootView: view)
-
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "Whispeur"
-        window.styleMask = [.titled, .closable, .fullSizeContentView]
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
-        window.setContentSize(NSSize(width: 520, height: 540))
-        window.center()
-        window.isReleasedWhenClosed = false
-        window.backgroundColor = .clear
-        let closeDelegate = WindowCloseDelegate { [weak self] in
-            self?.settingsWindow = nil
-            self?.settingsWindowDelegate = nil
-        }
-        settingsWindowDelegate = closeDelegate
-        window.delegate = closeDelegate
-        settingsWindow = window
-
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate()
+        // Opens the Settings window (tab selection is handled by macOS automatically).
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc func openHistory() {
-        openSettingsWindow(tab: .history)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
@@ -361,10 +321,4 @@ extension StatusBarController: NSMenuDelegate {
     }
 }
 
-// MARK: - Helper delegate
 
-private final class WindowCloseDelegate: NSObject, NSWindowDelegate {
-    private let onClose: () -> Void
-    init(_ onClose: @escaping () -> Void) { self.onClose = onClose }
-    func windowWillClose(_ notification: Notification) { onClose() }
-}

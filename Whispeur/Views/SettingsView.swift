@@ -1,206 +1,82 @@
 // SettingsView.swift
 // Whispeur
 //
-// Main settings window: glassmorphism background, 3 sections.
-// Header + tab picker are sticky (outside the ScrollView).
-// A single ScrollView wraps all tab content.
+// Native macOS Settings window using SwiftUI's TabView.
+// Each tab maps to an existing section view — no content changes needed.
 
 import SwiftUI
 import AppKit
 
-// MARK: - Root SettingsView
+// MARK: - NativeSettingsView
 
-struct SettingsView: View {
-    @Bindable var settings: AppSettings
-    let coordinator: RecordingCoordinator
-    @Bindable var micManager: MicrophonePermissionManager
-    let historyService: HistoryService
-
-    @State var selectedTab: SettingsTab
-
-    init(settings: AppSettings, coordinator: RecordingCoordinator, micManager: MicrophonePermissionManager, historyService: HistoryService, initialTab: SettingsTab = .general) {
-        self.settings = settings
-        self.coordinator = coordinator
-        self.micManager = micManager
-        self.historyService = historyService
-        _selectedTab = State(initialValue: initialTab)
-    }
+/// Root view embedded in the Settings scene. Uses the standard macOS tab toolbar.
+struct NativeSettingsView: View {
+    @EnvironmentObject private var services: ServicesContainer
 
     var body: some View {
-        ZStack {
-            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // ── Sticky header ──────────────────────────────────────────
-                header
-                    .padding(.top, 12)
-
-                // ── Sticky tab picker ──────────────────────────────────────
-                tabPicker
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
-
-                Divider().opacity(0.1)
-
-                // ── Single scrollable area ─────────────────────────────────
-                ScrollView(.vertical) {
-                    VStack {
-                    switch selectedTab {
-                        case .general:
-                            GeneralSection(settings: settings, hotkeyManager: coordinator.hotkeyManager)
-                        case .model:
-                            ModelSection(settings: settings, coordinator: coordinator)
-                        case .language:
-                            LanguageSection(settings: settings)
-                        case .engine:
-                            EngineSection(settings: settings)
-                        case .permissions:
-                            PermissionsSection(micManager: micManager)
-                        case .history:
-                            HistoryView(historyService: historyService)
-                                .preferredColorScheme(.dark)
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 14)
-                    .padding(.bottom, 16)
-                }
-
-                // ── Sticky footer ──────────────────────────────────────────
-                Divider().opacity(0.15)
-                footer
-            }
-        }
-        .frame(width: 560, height: 620)
-        .preferredColorScheme(.dark)
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: [Color(white: 0.28), Color(white: 0.18)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                    )
-                Image(systemName: micIcon(for: coordinator.pipelineState))
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(micColor(for: coordinator.pipelineState))
-                    .animation(.spring(duration: 0.3), value: coordinator.pipelineState)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Whispeur")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text(statusLabel(for: coordinator.pipelineState))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .animation(.easeInOut, value: coordinator.pipelineState)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 24)
-    }
-
-    // MARK: - Tab picker
-
-    private var tabPicker: some View {
-        HStack(spacing: 0) {
-            ForEach(SettingsTab.allCases) { tab in
-                Button {
-                    withAnimation(.spring(duration: 0.25)) { selectedTab = tab }
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 13, weight: .medium))
-                        Text(tab.label)
-                            .font(.system(size: 9, weight: .medium))
-                    }
-                    .padding(.vertical, 7)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(selectedTab == tab ? Color.white.opacity(0.14) : Color.clear)
-                    )
-                    .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.45))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(4)
-        .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(Color.white.opacity(0.07))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+        TabView {
+            ScrollView {
+                GeneralSection(
+                    settings: services.settings,
+                    hotkeyManager: services.hotkeyManager
                 )
-        )
-    }
+                .padding(20)
+            }
+            .tabItem {
+                Label("Général", systemImage: "gearshape.fill")
+            }
+            .tag(SettingsTab.general)
 
-    // MARK: - Footer
+            ScrollView {
+                ModelSection(
+                    settings: services.settings,
+                    coordinator: services.coordinator
+                )
+                .padding(20)
+            }
+            .tabItem {
+                Label("Modèle", systemImage: "cube.box.fill")
+            }
+            .tag(SettingsTab.model)
 
-    private var footer: some View {
-        HStack {
-            Circle()
-                .fill(micColor(for: coordinator.pipelineState))
-                .frame(width: 7, height: 7)
-                .shadow(color: micColor(for: coordinator.pipelineState).opacity(0.8), radius: 4)
-            Text(statusLabel(for: coordinator.pipelineState))
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.4))
-            Spacer()
-            Text("v0.1.0")
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.2))
+            ScrollView {
+                LanguageSection(settings: services.settings)
+                    .padding(20)
+            }
+            .tabItem {
+                Label("Langue", systemImage: "globe")
+            }
+            .tag(SettingsTab.language)
+
+            ScrollView {
+                EngineSection(settings: services.settings)
+                    .padding(20)
+            }
+            .tabItem {
+                Label("Moteur", systemImage: "cpu.fill")
+            }
+            .tag(SettingsTab.engine)
+
+            ScrollView {
+                PermissionsSection(micManager: services.micPermManager)
+                    .padding(20)
+            }
+            .tabItem {
+                Label("Permissions", systemImage: "lock.shield.fill")
+            }
+            .tag(SettingsTab.permissions)
+
+            ScrollView {
+                HistoryView(historyService: services.historyService)
+                    .padding(20)
+            }
+            .tabItem {
+                Label("Historique", systemImage: "clock.fill")
+            }
+            .tag(SettingsTab.history)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Helpers
-
-    private func micIcon(for state: PipelineState) -> String {
-        switch state {
-        case .idle:         return "mic"
-        case .loadingModel: return "waveform.circle"
-        case .recording:    return "mic.fill"
-        case .transcribing: return "waveform"
-        case .pasting:      return "doc.on.clipboard.fill"
-        case .error:        return "exclamationmark.triangle.fill"
-        }
-    }
-
-    private func micColor(for state: PipelineState) -> Color {
-        switch state {
-        case .idle:         return .white.opacity(0.6)
-        case .loadingModel: return .orange
-        case .recording:    return .red
-        case .transcribing: return .blue
-        case .pasting:      return .green
-        case .error:        return .orange
-        }
-    }
-
-    private func statusLabel(for state: PipelineState) -> String {
-        switch state {
-        case .idle:         return "Prêt"
-        case .loadingModel: return "Chargement du modèle…"
-        case .recording:    return "Enregistrement en cours…"
-        case .transcribing: return "Transcription…"
-        case .pasting:      return "Collage du texte…"
-        case .error(let m): return "Erreur : \(m)"
-        }
+        .frame(width: 560, height: 520)
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -209,30 +85,9 @@ struct SettingsView: View {
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general, model, language, engine, permissions, history
     var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .general:     return "Général"
-        case .model:       return "Modèle"
-        case .language:    return "Langue"
-        case .engine:      return "Moteur"
-        case .permissions: return "Permissions"
-        case .history:     return "Historique"
-        }
-    }
-    var icon: String {
-        switch self {
-        case .general:     return "gearshape.fill"
-        case .model:       return "cube.box.fill"
-        case .language:    return "globe"
-        case .engine:      return "cpu.fill"
-        case .permissions: return "lock.shield.fill"
-        case .history:     return "clock.fill"
-        }
-    }
 }
 
-// MARK: - NSVisualEffectView wrapper
+// MARK: - NSVisualEffectView wrapper (kept for potential reuse)
 
 struct VisualEffectView: NSViewRepresentable {
     var material: NSVisualEffectView.Material
