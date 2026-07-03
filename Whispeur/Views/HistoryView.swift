@@ -25,24 +25,11 @@ struct HistoryView: View {
                     
                     Spacer()
                     
-                    Button {
+                    Button(role: .destructive) {
                         historyService.clearAll()
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "trash")
-                                .font(.system(size: 11))
-                            Text("Effacer")
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        .foregroundStyle(historyService.items.isEmpty ? .white.opacity(0.3) : .red)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(historyService.items.isEmpty ? Color.white.opacity(0.05) : Color.red.opacity(0.15))
-                        )
+                        Label(LocalizedStringKey("Effacer"), systemImage: "trash")
                     }
-                    .buttonStyle(.plain)
                     .disabled(historyService.items.isEmpty)
                 }
             }
@@ -77,17 +64,18 @@ struct HistoryView: View {
                                         copyToClipboard(item.text)
                                     } label: {
                                         Image(systemName: "doc.on.doc")
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(.white.opacity(0.5))
                                     }
-                                    .buttonStyle(.plain)
-                                    .help("Copier le texte")
+                                    .buttonStyle(.borderless)
+                                    .help(String(localized: "Copier le texte"))
                                 }
                                 
-                                Text(item.text)
+                                TextField("", text: Binding(
+                                    get: { item.text },
+                                    set: { historyService.updateItem(id: item.id, newText: $0) }
+                                ), axis: .vertical)
+                                    .textFieldStyle(.plain)
                                     .font(.system(size: 13))
                                     .foregroundStyle(.white.opacity(0.9))
-                                    .textSelection(.enabled)
                             }
                         }
                     }

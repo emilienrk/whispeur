@@ -15,9 +15,10 @@ struct ModelSection: View {
     private let catalog = WhisperModelDescriptor.catalog
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
 
-            SettingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsCard {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionHeader(icon: "cube.box.fill", title: "Modèle Whisper")
                     HStack(spacing: 6) {
@@ -32,10 +33,13 @@ struct ModelSection: View {
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.2))
                 }
+                }
             }
+            .padding(20)
 
-            // Model list — no inner ScrollView, parent handles scrolling
-            LazyVStack(spacing: 6) {
+            // Model list
+            ScrollView {
+                LazyVStack(spacing: 6) {
                 ForEach(catalog) { model in
                     ModelRow(
                         model: model,
@@ -66,8 +70,10 @@ struct ModelSection: View {
                         }
                     )
                 }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
             }
-            .padding(.bottom, 6)
         }
     }
 }
@@ -124,10 +130,9 @@ private struct ModelRow: View {
                 if isDownloaded {
                     Button(action: onToggleFavorite) {
                         Image(systemName: isFavorite ? "star.fill" : "star")
-                            .font(.system(size: 13))
                             .foregroundStyle(isFavorite ? .yellow : .white.opacity(canFavorite ? 0.25 : 0.1))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .help(isFavorite ? "Retirer des favoris" : canFavorite ? "Ajouter aux favoris" : "Maximum \(AppSettings.maxFavorites) favoris")
                     .disabled(!canFavorite && !isFavorite)
                     .animation(.spring(duration: 0.25), value: isFavorite)
@@ -198,34 +203,18 @@ private struct ModelRow: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(isSelected ? Color.accentColor : .white.opacity(0.4))
                     if !isSelected {
-                        Button(action: onDelete) {
+                        Button(role: .destructive, action: onDelete) {
                             Image(systemName: "trash")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.white.opacity(0.25))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderless)
                         .help("Supprimer le modèle")
                     }
                 }
             } else {
                 // Not downloaded: download button
                 Button(action: onDownload) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 13))
-                        Text("Télécharger")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundStyle(.white.opacity(0.5))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.07))
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
-                    )
+                    Label(LocalizedStringKey("Télécharger"), systemImage: "arrow.down.circle")
                 }
-                .buttonStyle(.plain)
             }
 
         case .downloading(let progress):
@@ -234,12 +223,11 @@ private struct ModelRow: View {
                 Text("\(Int(progress * 100))%")
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.4))
-                Button(action: onCancel) {
+                Button(role: .cancel, action: onCancel) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
                         .foregroundStyle(.white.opacity(0.3))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
                 .help("Annuler")
             }
 
@@ -258,34 +246,18 @@ private struct ModelRow: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(isSelected ? Color.accentColor : .white.opacity(0.4))
                 if !isSelected {
-                    Button(action: onDelete) {
+                    Button(role: .destructive, action: onDelete) {
                         Image(systemName: "trash")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.white.opacity(0.25))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .help("Supprimer le modèle")
                 }
             }
 
         case .failed:
             Button(action: onDownload) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 11))
-                    Text("Réessayer")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .foregroundStyle(.orange.opacity(0.8))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule()
-                        .fill(Color.orange.opacity(0.08))
-                        .overlay(Capsule().strokeBorder(Color.orange.opacity(0.2), lineWidth: 1))
-                )
+                Label(LocalizedStringKey("Réessayer"), systemImage: "arrow.clockwise")
             }
-            .buttonStyle(.plain)
         }
     }
 }

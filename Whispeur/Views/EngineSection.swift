@@ -45,34 +45,13 @@ struct EngineSection: View {
                                 .foregroundStyle(.white.opacity(0.7))
                             Spacer()
                             HStack(spacing: 8) {
-                                Button {
-                                    if settings.beamSize > 1 { settings.beamSize -= 1 }
-                                } label: {
-                                    Image(systemName: "minus")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .frame(width: 24, height: 24)
-                                        .background(Color.white.opacity(0.08))
-                                        .clipShape(Circle())
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(settings.beamSize <= 1)
-
                                 Text("\(settings.beamSize)")
                                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
                                     .foregroundStyle(.white)
                                     .frame(width: 20, alignment: .center)
 
-                                Button {
-                                    if settings.beamSize < 10 { settings.beamSize += 1 }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .frame(width: 24, height: 24)
-                                        .background(Color.white.opacity(0.08))
-                                        .clipShape(Circle())
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(settings.beamSize >= 10)
+                                Stepper("", value: $settings.beamSize, in: 1...10)
+                                    .labelsHidden()
                             }
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -95,6 +74,7 @@ struct EngineSection: View {
                         lowLabel: "Déterministe",
                         highLabel: "Créatif",
                         description: "À 0, la transcription est reproductible. Plus haute = plus de variété, mais aussi plus d'erreurs.",
+                        step: 0.05,
                         format: { String(format: "%.2f", $0) }
                     )
 
@@ -109,6 +89,7 @@ struct EngineSection: View {
                         lowLabel: "Sensible",
                         highLabel: "Strict",
                         description: "Si la proba de silence dépasse ce seuil, le segment est ignoré. Augmenter réduit les hallucinations.",
+                        step: 0.05,
                         format: { String(format: "%.2f", $0) }
                     )
                 }
@@ -219,6 +200,7 @@ private struct EngineSliderRow: View {
     let lowLabel: String
     let highLabel: String
     let description: String
+    var step: Double? = nil
     let format: (Double) -> String
 
     var body: some View {
@@ -241,8 +223,13 @@ private struct EngineSliderRow: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
 
-            Slider(value: $value, in: range, step: 0.05)
-                .tint(Color.accentColor)
+            if let step = step {
+                Slider(value: $value, in: range, step: step)
+                    .tint(Color.accentColor)
+            } else {
+                Slider(value: $value, in: range)
+                    .tint(Color.accentColor)
+            }
 
             HStack {
                 Text(lowLabel)

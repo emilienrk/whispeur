@@ -9,11 +9,11 @@ struct WhispeurApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        // The native macOS Settings scene — opens with Cmd+, and appears
-        // in the "Whispeur" application menu automatically.
+        // macOS 14+ LSUIElement apps don't handle the Settings scene well without a main menu.
+        // We use a custom NSWindow to show settings.
+        // But an App must have at least one scene.
         Settings {
-            NativeSettingsView()
-                .environmentObject(appDelegate.servicesContainer)
+            EmptyView()
         }
     }
 }
@@ -64,7 +64,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             coordinator: sc.coordinator,
             settings: sc.settings,
             historyService: sc.historyService,
-            micPermissionManager: sc.micPermManager
+            micPermissionManager: sc.micPermManager,
+            servicesContainer: sc
         )
 
         // Observe pipeline state → update icon.

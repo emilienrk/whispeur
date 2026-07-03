@@ -43,6 +43,13 @@ final class HistoryService {
         saveHistory()
     }
     
+    func updateItem(id: UUID, newText: String) {
+        if let index = items.firstIndex(where: { $0.id == id }) {
+            items[index].text = newText
+            saveHistory()
+        }
+    }
+    
     private func loadHistory() {
         guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else { return }
         do {

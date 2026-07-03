@@ -35,7 +35,7 @@ struct HotKey: Equatable, Sendable, Codable {
         if flags.contains(.maskShift)     { parts.append("⇧") }
         if flags.contains(.maskCommand)   { parts.append("⌘") }
         parts.append(Self.keyCodeToString(keyCode) ?? "[\(keyCode)]")
-        return parts.joined()
+        return parts.joined(separator: " ")
     }
 
     /// Default: fn key (63), matching Wispr Flow behavior.
@@ -69,8 +69,8 @@ enum HotKeyMode: String, Codable, CaseIterable, Sendable {
 
     var displayName: String {
         switch self {
-        case .pushToTalk: return "Maintenir enfoncé"
-        case .toggle:     return "Basculer (un clic start/stop)"
+        case .pushToTalk: return String(localized: "Maintenir enfoncé")
+        case .toggle:     return String(localized: "Basculer (un clic start/stop)")
         }
     }
 }

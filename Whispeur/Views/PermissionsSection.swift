@@ -139,21 +139,7 @@ struct PermissionsSection: View {
 
     private func permissionButton(label: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .foregroundStyle(.white.opacity(0.6))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(Color.white.opacity(0.07))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
-            )
+            Label(LocalizedStringKey(label), systemImage: icon)
         }
-        .buttonStyle(.plain)
     }
 }

@@ -20,9 +20,10 @@ struct LanguageSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
 
-            SettingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsCard {
                 VStack(alignment: .leading, spacing: 14) {
                     SectionHeader(icon: "globe", title: "Langue de transcription")
 
@@ -32,7 +33,7 @@ struct LanguageSection: View {
                             .font(.system(size: 13))
                             .foregroundStyle(.white.opacity(0.7))
                         Spacer()
-                        Text(settings.selectedLanguage.displayName)
+                        Text(verbatim: settings.selectedLanguage.displayName)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.white)
                     }
@@ -79,6 +80,8 @@ struct LanguageSection: View {
                             .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
                     )
             )
+            }
+            .padding(20)
 
             // Language list
             ScrollView {
@@ -91,21 +94,9 @@ struct LanguageSection: View {
                         )
                     }
                 }
-                .padding(.bottom, 8)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
             }
-            .frame(maxHeight: 220)
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .black, location: 0.04),
-                        .init(color: .black, location: 0.96),
-                        .init(color: .clear, location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
         }
     }
 }
@@ -129,7 +120,7 @@ private struct LanguageRow: View {
                     Spacer().frame(width: 16)
                 }
 
-                Text(language.displayName)
+                Text(verbatim: language.displayName)
                     .font(.system(size: 13))
                     .foregroundStyle(isSelected ? .white : .white.opacity(0.65))
 

@@ -28,6 +28,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: "Whispeur/Whispeur.entitlements"
         ALWAYS_SEARCH_USER_PATHS: "NO"
         SYMROOT: "$(SRCROOT)/build"
+        SWIFT_EMIT_LOC_STRINGS: "YES"
         LIBRARY_SEARCH_PATHS:
           - "$(SRCROOT)/build-whisper/src"
           - "$(SRCROOT)/build-whisper/ggml/src"

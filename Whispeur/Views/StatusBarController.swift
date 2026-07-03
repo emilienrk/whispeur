@@ -22,6 +22,7 @@ final class StatusBarController: NSObject {
     private let settings: AppSettings
     private let historyService: HistoryService
     private let micPermissionManager: MicrophonePermissionManager
+    private let servicesContainer: ServicesContainer
 
     private var spinTimer: Timer?
     private var spinAngle: CGFloat = 0
@@ -36,11 +37,12 @@ final class StatusBarController: NSObject {
 
     // MARK: - Init
 
-    init(coordinator: RecordingCoordinator, settings: AppSettings = .shared, historyService: HistoryService, micPermissionManager: MicrophonePermissionManager) {
+    init(coordinator: RecordingCoordinator, settings: AppSettings = .shared, historyService: HistoryService, micPermissionManager: MicrophonePermissionManager, servicesContainer: ServicesContainer) {
         self.coordinator = coordinator
         self.settings = settings
         self.historyService = historyService
         self.micPermissionManager = micPermissionManager
+        self.servicesContainer = servicesContainer
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         configureButton()
@@ -72,22 +74,22 @@ final class StatusBarController: NSObject {
         let triggerAction: Selector?
         switch state {
         case .idle:
-            triggerTitle  = "Démarrer l'enregistrement"
+            triggerTitle  = String(localized: "Démarrer l'enregistrement")
             triggerAction = #selector(triggerRecording)
         case .loadingModel:
-            triggerTitle  = "Arrêter l'enregistrement"
+            triggerTitle  = String(localized: "Arrêter l'enregistrement")
             triggerAction = #selector(triggerRecording)
         case .recording:
-            triggerTitle  = "Arrêter l'enregistrement"
+            triggerTitle  = String(localized: "Arrêter l'enregistrement")
             triggerAction = #selector(triggerRecording)
         case .transcribing:
-            triggerTitle  = "Transcription en cours…"
+            triggerTitle  = String(localized: "Transcription en cours…")
             triggerAction = nil
         case .pasting:
-            triggerTitle  = "Collage en cours…"
+            triggerTitle  = String(localized: "Collage en cours…")
             triggerAction = nil
         case .error(let msg):
-            triggerTitle  = "Erreur : \(msg)"
+            triggerTitle  = String(localized: "Erreur") + " : \(msg)"
             triggerAction = nil
         }
 
@@ -98,24 +100,12 @@ final class StatusBarController: NSObject {
 
         menu.addItem(.separator())
 
-        // ── Current config (informational, disabled) ──────────────────────
-        let hotKeyItem = NSMenuItem(
-            title: "Raccourci : \(settings.currentHotKey.displayString)  ·  \(settings.hotKeyMode.displayName)",
-            action: #selector(openSettingsToHotkey),
-            keyEquivalent: ""
-        )
-        hotKeyItem.target = self
-        hotKeyItem.isEnabled = true
-        // Enlève le texte grisé pour montrer qu'il est cliquable.
-        // hotKeyItem.attributedTitle = NSAttributedString(...)
-        menu.addItem(hotKeyItem)
-
         // ── Favorite models ───────────────────────────────────────────────
         let favorites = settings.favoritedModelDescriptors.filter { $0.isDownloaded }
         if !favorites.isEmpty {
             menu.addItem(.separator())
 
-            let favHeader = NSMenuItem(title: "Modèles favoris", action: nil, keyEquivalent: "")
+            let favHeader = NSMenuItem(title: String(localized: "Modèles favoris"), action: nil, keyEquivalent: "")
             favHeader.isEnabled = false
             favHeader.attributedTitle = NSAttributedString(
                 string: favHeader.title,
@@ -154,17 +144,17 @@ final class StatusBarController: NSObject {
         menu.addItem(.separator())
 
         // ── Settings / History / Quit ─────────────────────────────────────
-        let historyItem = NSMenuItem(title: "Historique des transcriptions…", action: #selector(openHistory), keyEquivalent: "h")
+        let historyItem = NSMenuItem(title: String(localized: "Historique des transcriptions…"), action: #selector(openHistory), keyEquivalent: "h")
         historyItem.target = self
         historyItem.image = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)
         menu.addItem(historyItem)
         
-        let settingsItem = NSMenuItem(title: "Paramètres…", action: #selector(openSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: String(localized: "Paramètres…"), action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
         menu.addItem(settingsItem)
 
-        let quitItem = NSMenuItem(title: "Quitter Whispeur", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: String(localized: "Quitter Whispeur"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quitItem.image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: nil)
         menu.addItem(quitItem)
 
@@ -176,13 +166,19 @@ final class StatusBarController: NSObject {
     func updateIcon(for state: PipelineState) {
         guard let button = statusItem.button else { return }
 
-        spinTimer?.invalidate()
-        spinTimer = nil
-
-        recordingTimer?.invalidate()
-        recordingTimer = nil
+        // Only invalidate the recording timer if we are leaving a recording state
+        let isRecordingState = (state == .loadingModel || state == .recording)
+        if !isRecordingState {
+            recordingTimer?.invalidate()
+            recordingTimer = nil
+            button.title = ""
+        }
         
-        button.title = ""
+        let isSpinningState = (state == .transcribing)
+        if !isSpinningState {
+            spinTimer?.invalidate()
+            spinTimer = nil
+        }
         
         // Use pointSize and weight to exactly match the Apple Control Center mic icon
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
@@ -194,24 +190,26 @@ final class StatusBarController: NSObject {
             button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Whispeur")?.withSymbolConfiguration(config)
             button.contentTintColor = nil
 
-        case .loadingModel:
-            button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Enregistrement…")?.withSymbolConfiguration(config)
-            button.contentTintColor = .systemOrange
-
-        case .recording:
+        case .loadingModel, .recording:
             button.image = nil
-            button.title = "0:00"
             button.contentTintColor = nil
             
-            recordingStartTime = Date()
-            recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.updateRecordingTimer() }
+            if recordingTimer == nil {
+                button.title = "0:00"
+                recordingStartTime = Date()
+                let t = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.updateRecordingTimer() }
+                }
+                RunLoop.current.add(t, forMode: .common)
+                recordingTimer = t
             }
 
         case .transcribing:
             button.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: "Transcription…")?.withSymbolConfiguration(config)
             button.contentTintColor = nil
-            shouldSpin = true
+            if spinTimer == nil {
+                shouldSpin = true
+            }
 
         case .pasting:
             button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Whispeur")?.withSymbolConfiguration(config)
@@ -227,10 +225,11 @@ final class StatusBarController: NSObject {
         if shouldSpin {
             baseSpinImage = button.image
             spinAngle = 0
-            spinTimer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { [weak self] _ in
-                // Timer.scheduledTimer always fires on the main run loop thread.
+            let t = Timer(timeInterval: 0.04, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.tickSpin() }
             }
+            RunLoop.current.add(t, forMode: .common)
+            spinTimer = t
         }
     }
 
@@ -288,20 +287,12 @@ final class StatusBarController: NSObject {
     }
 
     @objc func openSettings() {
-        // Open the native Settings window via the standard AppKit action.
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
+        SettingsWindowController.shared.show(services: servicesContainer)
     }
 
-    @objc func openSettingsToHotkey() {
-        // Opens the Settings window (tab selection is handled by macOS automatically).
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
 
     @objc func openHistory() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
+        SettingsWindowController.shared.show(services: servicesContainer, tab: .history)
     }
 }
 

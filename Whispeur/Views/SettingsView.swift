@@ -1,7 +1,7 @@
 // SettingsView.swift
 // Whispeur
 //
-// Native macOS Settings window using SwiftUI's TabView.
+// Native macOS Settings window using an NSToolbar (via SettingsWindowController).
 // Each tab maps to an existing section view — no content changes needed.
 
 import SwiftUI
@@ -12,69 +12,44 @@ import AppKit
 /// Root view embedded in the Settings scene. Uses the standard macOS tab toolbar.
 struct NativeSettingsView: View {
     @EnvironmentObject private var services: ServicesContainer
+    @ObservedObject var tabSelection: SettingsWindowController.TabSelection
 
     var body: some View {
-        TabView {
-            ScrollView {
-                GeneralSection(
-                    settings: services.settings,
-                    hotkeyManager: services.hotkeyManager
-                )
-                .padding(20)
-            }
-            .tabItem {
-                Label("Général", systemImage: "gearshape.fill")
-            }
-            .tag(SettingsTab.general)
-
-            ScrollView {
+        Group {
+            switch tabSelection.currentTab {
+            case .general:
+                ScrollView {
+                    GeneralSection(
+                        settings: services.settings,
+                        hotkeyManager: services.hotkeyManager
+                    )
+                    .padding(20)
+                }
+            case .model:
                 ModelSection(
                     settings: services.settings,
                     coordinator: services.coordinator
                 )
-                .padding(20)
-            }
-            .tabItem {
-                Label("Modèle", systemImage: "cube.box.fill")
-            }
-            .tag(SettingsTab.model)
-
-            ScrollView {
+            case .language:
                 LanguageSection(settings: services.settings)
-                    .padding(20)
+            case .engine:
+                ScrollView {
+                    EngineSection(settings: services.settings)
+                        .padding(20)
+                }
+            case .permissions:
+                ScrollView {
+                    PermissionsSection(micManager: services.micPermManager)
+                        .padding(20)
+                }
+            case .history:
+                ScrollView {
+                    HistoryView(historyService: services.historyService)
+                        .padding(20)
+                }
             }
-            .tabItem {
-                Label("Langue", systemImage: "globe")
-            }
-            .tag(SettingsTab.language)
-
-            ScrollView {
-                EngineSection(settings: services.settings)
-                    .padding(20)
-            }
-            .tabItem {
-                Label("Moteur", systemImage: "cpu.fill")
-            }
-            .tag(SettingsTab.engine)
-
-            ScrollView {
-                PermissionsSection(micManager: services.micPermManager)
-                    .padding(20)
-            }
-            .tabItem {
-                Label("Permissions", systemImage: "lock.shield.fill")
-            }
-            .tag(SettingsTab.permissions)
-
-            ScrollView {
-                HistoryView(historyService: services.historyService)
-                    .padding(20)
-            }
-            .tabItem {
-                Label("Historique", systemImage: "clock.fill")
-            }
-            .tag(SettingsTab.history)
         }
+        // Force the window to stay at a consistent size across tabs
         .frame(width: 560, height: 520)
         .preferredColorScheme(.dark)
     }
@@ -85,6 +60,28 @@ struct NativeSettingsView: View {
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general, model, language, engine, permissions, history
     var id: String { rawValue }
+    
+    var title: String {
+        switch self {
+        case .general: return String(localized: "Général")
+        case .model: return String(localized: "Modèle")
+        case .language: return String(localized: "Langue")
+        case .engine: return String(localized: "Moteur")
+        case .permissions: return String(localized: "Permissions")
+        case .history: return String(localized: "Historique")
+        }
+    }
+    
+    var systemImage: String {
+        switch self {
+        case .general: return "gearshape.fill"
+        case .model: return "cube.box.fill"
+        case .language: return "globe"
+        case .engine: return "cpu.fill"
+        case .permissions: return "lock.shield.fill"
+        case .history: return "clock.fill"
+        }
+    }
 }
 
 // MARK: - NSVisualEffectView wrapper (kept for potential reuse)

@@ -42,6 +42,12 @@ final class AppSettings {
         } else {
             favoritedModelFilenames = []
         }
+        
+        if let appleLangs = ud.stringArray(forKey: "AppleLanguages"), let first = appleLangs.first {
+            _uiLanguage = first
+        } else {
+            _uiLanguage = Locale.preferredLanguages.first?.hasPrefix("fr") == true ? "fr" : "en"
+        }
     }
 
     // MARK: - Hotkey
@@ -87,6 +93,16 @@ final class AppSettings {
     }
 
     // MARK: - General settings
+
+    private var _uiLanguage: String {
+        didSet {
+            UserDefaults.standard.set([_uiLanguage], forKey: "AppleLanguages")
+        }
+    }
+    var uiLanguage: String {
+        get { _uiLanguage }
+        set { _uiLanguage = newValue }
+    }
 
     private var _autoPasteEnabled: Bool {
         didSet { UserDefaults.standard.set(_autoPasteEnabled, forKey: "autoPaste") }

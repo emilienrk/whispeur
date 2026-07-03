@@ -95,6 +95,31 @@ struct GeneralSection: View {
                     )
                 }
             }
+
+            // MARK: - Interface
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(icon: "character.bubble.fill", title: "Interface")
+
+                    HStack {
+                        Text("Langue de l'application")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.9))
+                        Spacer()
+                        Picker("", selection: $settings.uiLanguage) {
+                            Text(verbatim: "Français").tag("fr")
+                            Text(verbatim: "English").tag("en")
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: 120)
+                    }
+
+                    Text("Le changement de langue nécessite le redémarrage de l'application.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+            }
         }
     }
 }
@@ -211,24 +236,7 @@ struct HotKeyRecorder: View {
                         .foregroundStyle(.white.opacity(0.3))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isRecording
-                          ? Color.red.opacity(0.12)
-                          : Color.white.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(
-                                isRecording ? Color.red.opacity(0.4) : Color.white.opacity(0.15),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .animation(.easeInOut(duration: 0.15), value: isRecording)
         }
-        .buttonStyle(.plain)
         .onDisappear { stopRecording() }
     }
 
