@@ -35,7 +35,7 @@ struct GeneralSection: View {
                         )
                     }
 
-                    Text("Fonctionne même quand Whispeur est en arrière-plan. La touche choisie est interceptée avant macOS : binder 🎤 remplace la dictée Apple.")
+                    Text("Fonctionne même quand Whispeur est en arrière-plan. La touche choisie est interceptée avant macOS : binder la touche Dictée remplace la dictée Apple.")
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.3))
                 }
