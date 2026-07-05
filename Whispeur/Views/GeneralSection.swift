@@ -30,11 +30,12 @@ struct GeneralSection: View {
                                     settings.hotKeyModifiers = newKey.modifiers
                                     hotkeyManager.updateHotKey(newKey)
                                 }
-                            )
+                            ),
+                            hotkeyManager: hotkeyManager
                         )
                     }
 
-                    Text("Fonctionne même quand Whispeur est en arrière-plan.")
+                    Text("Fonctionne même quand Whispeur est en arrière-plan. La touche choisie est interceptée avant macOS : binder 🎤 remplace la dictée Apple.")
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.3))
                 }
@@ -211,6 +212,7 @@ private struct ModeRow: View {
 
 struct HotKeyRecorder: View {
     @Binding var hotKey: HotKey
+    let hotkeyManager: HotkeyManager
     @State private var isRecording = false
     @State private var localMonitor: Any?
     @State private var globalMonitor: Any?
@@ -248,6 +250,18 @@ struct HotKeyRecorder: View {
         isRecording = true
         NSApp.activate()
 
+        // Voie principale : capture via le CGEventTap du HotkeyManager.
+        // C'est la seule source qui voit les touches spéciales (🎤 dictée,
+        // Mission Control…) et qui les consomme avant que macOS ne réagisse.
+        if hotkeyManager.beginHotKeyCapture({ captured in
+            if let captured { hotKey = captured }
+            isRecording = false
+        }) {
+            return
+        }
+
+        // Repli sans permission d'accessibilité : moniteurs NSEvent
+        // (ne voit pas les touches spéciales comme 🎤).
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 {
                 stopRecording()
@@ -308,6 +322,7 @@ struct HotKeyRecorder: View {
 
     private func stopRecording() {
         isRecording = false
+        hotkeyManager.cancelHotKeyCapture()
         if let m = localMonitor  { NSEvent.removeMonitor(m); localMonitor = nil }
         if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
         if let m = flagsMonitor  { NSEvent.removeMonitor(m); flagsMonitor = nil }

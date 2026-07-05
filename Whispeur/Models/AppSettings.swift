@@ -20,9 +20,15 @@ final class AppSettings {
 
     private init() {
         let ud = UserDefaults.standard
-        // Default hotkey: fn key (63), matching Wispr Flow behavior
-        hotKeyCode             = (ud.integer(forKey: "hotKeyCode").nonZero) ?? 63
-        hotKeyModifiers        = ud.integer(forKey: "hotKeyModifiers")
+        // Default hotkey: Dictation key 🎤 (176) — replaces Apple Dictation with Whisper.
+        // Migration : un ancien build utilisait 160 par défaut, qui est en
+        // réalité Mission Control (F3) ; la touche dictée est 176.
+        if ud.integer(forKey: "hotKeyCode") == 160,
+           ((ud.object(forKey: "hotKeyModifiers") as? Int) ?? 0) == 0 {
+            ud.set(176, forKey: "hotKeyCode")
+        }
+        hotKeyCode             = (ud.integer(forKey: "hotKeyCode").nonZero) ?? 176
+        hotKeyModifiers        = (ud.object(forKey: "hotKeyModifiers") as? Int) ?? 0
         _hotKeyModeRaw         = ud.string(forKey: "hotKeyMode") ?? HotKeyMode.pushToTalk.rawValue
         selectedModelFilename  = ud.string(forKey: "selectedModel") ?? "ggml-base.bin"
         languageCode           = ud.string(forKey: "language") ?? "auto"
