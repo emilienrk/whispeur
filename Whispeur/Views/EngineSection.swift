@@ -95,6 +95,40 @@ struct EngineSection: View {
                 }
             }
 
+            // MARK: - Initial prompt
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionHeader(icon: "text.quote", title: "Prompt initial")
+
+                    TextEditor(text: $settings.initialPrompt)
+                        .font(.system(size: 13))
+                        .scrollContentBackground(.hidden)
+                        .padding(6)
+                        .frame(height: 70)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(Color.white.opacity(0.06))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+
+                    Text("Donné au modèle comme contexte avant chaque dictée : vocabulaire spécifique, noms propres, style de ponctuation. Vide = désactivé.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            // MARK: - VAD
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(icon: "waveform.badge.mic", title: "Détection de voix (VAD)")
+                    VADToggleRow(settings: settings)
+                }
+            }
+
             // MARK: - Context & hardware
             SettingsCard {
                 VStack(alignment: .leading, spacing: 14) {
@@ -187,6 +221,61 @@ private struct DecodingModeRow: View {
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
+    }
+}
+
+// MARK: - VAD toggle row (avec téléchargement du modèle Silero)
+
+private struct VADToggleRow: View {
+    @Bindable var settings: AppSettings
+
+    var body: some View {
+        let model = WhisperModelDescriptor.vadSilero
+        let state = ModelManager.shared.state(for: model)
+
+        VStack(alignment: .leading, spacing: 8) {
+            SettingsToggleRow(
+                icon: "waveform.and.mic",
+                label: "Filtre VAD (Silero)",
+                description: "Ignore les passages sans parole avant la transcription. Réduit les hallucinations sur les silences.",
+                isOn: Binding(
+                    get: { settings.vadEnabled },
+                    set: { enabled in
+                        settings.vadEnabled = enabled
+                        if enabled && !model.isDownloaded {
+                            ModelManager.shared.download(model)
+                        }
+                    }
+                )
+            )
+
+            if settings.vadEnabled {
+                switch state {
+                case .downloading(let progress):
+                    HStack(spacing: 8) {
+                        ProgressView(value: progress)
+                            .frame(maxWidth: 160)
+                        Text("Téléchargement du modèle VAD… \(Int(progress * 100)) %")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                case .installing:
+                    Text("Installation…")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.4))
+                case .failed(let message):
+                    Text("Échec du téléchargement : \(message)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red.opacity(0.8))
+                case .idle:
+                    Text("Modèle VAD manquant — désactivez puis réactivez pour relancer le téléchargement.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange.opacity(0.8))
+                case .done:
+                    EmptyView()
+                }
+            }
+        }
     }
 }
 
