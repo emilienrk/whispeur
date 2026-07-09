@@ -31,6 +31,7 @@ struct WhisperEngineConfig: Sendable {
     var noSpeechThreshold: Float
     var conditionOnPreviousText: Bool
     var useGPU: Bool
+    var initialPrompt: String
 
     static let `default` = WhisperEngineConfig(
         useBeamSearch: false,
@@ -38,7 +39,8 @@ struct WhisperEngineConfig: Sendable {
         temperature: 0.0,
         noSpeechThreshold: 0.6,
         conditionOnPreviousText: false,
-        useGPU: true
+        useGPU: true,
+        initialPrompt: ""
     )
 }
 
@@ -129,25 +131,24 @@ actor WhisperService {
         params.single_segment   = false
         params.temperature      = config.temperature
         params.no_speech_thold  = config.noSpeechThreshold
-        params.language         = nil  // overridden below if set
-
         if config.useBeamSearch {
             params.beam_search.beam_size = Int32(config.beamSize)
         }
 
+        // Les chaînes C doivent survivre à whisper_full : strdup + defer free
+        // évite l'imbrication de withCString pour plusieurs chaînes optionnelles.
+        let cLanguage: UnsafeMutablePointer<CChar>? = language.whisperCode.flatMap { strdup($0) }
+        let cPrompt: UnsafeMutablePointer<CChar>? = config.initialPrompt.isEmpty ? nil : strdup(config.initialPrompt)
+        defer {
+            free(cLanguage)
+            free(cPrompt)
+        }
+        params.language = UnsafePointer(cLanguage)
+        params.initial_prompt = UnsafePointer(cPrompt)
+
         var result: Int32 = 0
-        if let code = language.whisperCode {
-            // Whisper language code must remain valid for the duration of the call.
-            code.withCString { cCode in
-                params.language = cCode
-                samples.withUnsafeBufferPointer { buf in
-                    result = whisper_full(ctx, params, buf.baseAddress, Int32(buf.count))
-                }
-            }
-        } else {
-            samples.withUnsafeBufferPointer { buf in
-                result = whisper_full(ctx, params, buf.baseAddress, Int32(buf.count))
-            }
+        samples.withUnsafeBufferPointer { buf in
+            result = whisper_full(ctx, params, buf.baseAddress, Int32(buf.count))
         }
         if result != 0 { throw WhisperServiceError.transcriptionFailed }
 

@@ -42,6 +42,7 @@ final class AppSettings {
         _conditionOnPrevious   = (ud.object(forKey: "conditionOnPrevious") as? Bool) ?? false
         _useGPU                = (ud.object(forKey: "useGPU") as? Bool) ?? true
         _modelUnloadDelay      = (ud.object(forKey: "modelUnloadDelay") as? Double) ?? 0.0
+        _initialPrompt         = ud.string(forKey: "initialPrompt") ?? ""
         if let data = ud.data(forKey: "favoritedModels"),
            let arr  = try? JSONDecoder().decode([String].self, from: data) {
             favoritedModelFilenames = arr
@@ -200,6 +201,28 @@ final class AppSettings {
     var modelUnloadDelay: Double {
         get { _modelUnloadDelay }
         set { _modelUnloadDelay = max(0, newValue) }
+    }
+
+    private var _initialPrompt: String {
+        didSet { UserDefaults.standard.set(_initialPrompt, forKey: "initialPrompt") }
+    }
+    /// Context text fed to the decoder before each dictation (vocabulary, proper nouns, punctuation style). Empty = disabled.
+    var initialPrompt: String {
+        get { _initialPrompt }
+        set { _initialPrompt = newValue }
+    }
+
+    /// Engine config snapshot passed to WhisperService for one transcription.
+    var engineConfig: WhisperEngineConfig {
+        WhisperEngineConfig(
+            useBeamSearch: useBeamSearch,
+            beamSize: beamSize,
+            temperature: Float(temperature),
+            noSpeechThreshold: Float(noSpeechThreshold),
+            conditionOnPreviousText: conditionOnPreviousText,
+            useGPU: useGPU,
+            initialPrompt: initialPrompt
+        )
     }
 
     // MARK: - Favorited models (max 4)
