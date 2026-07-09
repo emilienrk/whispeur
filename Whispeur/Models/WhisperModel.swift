@@ -143,6 +143,16 @@ struct WhisperModelDescriptor: Identifiable, Hashable, Sendable {
     static var testModel: WhisperModelDescriptor {
         catalog.first { $0.name == "base" }!
     }
+
+    /// Modèle Silero VAD requis par le filtre VAD de whisper.cpp.
+    /// Hors catalogue : téléchargé automatiquement quand le VAD est activé.
+    static let vadSilero = WhisperModelDescriptor(
+        name: "silero-vad-v5.1.2",
+        sizeInfo: "~1 MiB",
+        downloadURL: URL(string: "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin")!,
+        filename: "ggml-silero-v5.1.2.bin",
+        isEnglishOnly: false
+    )
 }
 
 private let huggingFaceBase = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"

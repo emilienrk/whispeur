@@ -43,6 +43,7 @@ final class AppSettings {
         _useGPU                = (ud.object(forKey: "useGPU") as? Bool) ?? true
         _modelUnloadDelay      = (ud.object(forKey: "modelUnloadDelay") as? Double) ?? 0.0
         _initialPrompt         = ud.string(forKey: "initialPrompt") ?? ""
+        _vadEnabled            = (ud.object(forKey: "vadEnabled") as? Bool) ?? false
         if let data = ud.data(forKey: "favoritedModels"),
            let arr  = try? JSONDecoder().decode([String].self, from: data) {
             favoritedModelFilenames = arr
@@ -212,16 +213,29 @@ final class AppSettings {
         set { _initialPrompt = newValue }
     }
 
+    private var _vadEnabled: Bool {
+        didSet { UserDefaults.standard.set(_vadEnabled, forKey: "vadEnabled") }
+    }
+    /// Silero VAD filter: skips non-speech audio before transcription (needs the VAD model file).
+    var vadEnabled: Bool {
+        get { _vadEnabled }
+        set { _vadEnabled = newValue }
+    }
+
     /// Engine config snapshot passed to WhisperService for one transcription.
+    /// Resolves the VAD model path here (MainActor) so the actor never touches FileManager for it.
     var engineConfig: WhisperEngineConfig {
-        WhisperEngineConfig(
+        let vadModel = WhisperModelDescriptor.vadSilero
+        return WhisperEngineConfig(
             useBeamSearch: useBeamSearch,
             beamSize: beamSize,
             temperature: Float(temperature),
             noSpeechThreshold: Float(noSpeechThreshold),
             conditionOnPreviousText: conditionOnPreviousText,
             useGPU: useGPU,
-            initialPrompt: initialPrompt
+            initialPrompt: initialPrompt,
+            vadEnabled: vadEnabled,
+            vadModelPath: (vadEnabled && vadModel.isDownloaded) ? vadModel.localURL.path(percentEncoded: false) : nil
         )
     }
 

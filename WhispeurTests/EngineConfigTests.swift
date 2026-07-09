@@ -36,4 +36,32 @@ struct EngineConfigTests {
         #expect(config.useBeamSearch == true)
         #expect(abs(config.temperature - 0.3) < 0.0001)
     }
+
+    @Test("VAD disabled produces nil model path")
+    func vadDisabledNilPath() {
+        let s = AppSettings.shared
+        let saved = s.vadEnabled
+        defer { s.vadEnabled = saved }
+
+        s.vadEnabled = false
+
+        #expect(s.engineConfig.vadEnabled == false)
+        #expect(s.engineConfig.vadModelPath == nil)
+    }
+
+    @Test("VAD enabled resolves the path only when the model file exists")
+    func vadEnabledPathResolution() {
+        let s = AppSettings.shared
+        let saved = s.vadEnabled
+        defer { s.vadEnabled = saved }
+
+        s.vadEnabled = true
+        let model = WhisperModelDescriptor.vadSilero
+
+        if model.isDownloaded {
+            #expect(s.engineConfig.vadModelPath == model.localURL.path(percentEncoded: false))
+        } else {
+            #expect(s.engineConfig.vadModelPath == nil)
+        }
+    }
 }

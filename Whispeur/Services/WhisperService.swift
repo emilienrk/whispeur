@@ -32,6 +32,8 @@ struct WhisperEngineConfig: Sendable {
     var conditionOnPreviousText: Bool
     var useGPU: Bool
     var initialPrompt: String
+    var vadEnabled: Bool
+    var vadModelPath: String?
 
     static let `default` = WhisperEngineConfig(
         useBeamSearch: false,
@@ -40,7 +42,9 @@ struct WhisperEngineConfig: Sendable {
         noSpeechThreshold: 0.6,
         conditionOnPreviousText: false,
         useGPU: true,
-        initialPrompt: ""
+        initialPrompt: "",
+        vadEnabled: false,
+        vadModelPath: nil
     )
 }
 
@@ -139,12 +143,21 @@ actor WhisperService {
         // évite l'imbrication de withCString pour plusieurs chaînes optionnelles.
         let cLanguage: UnsafeMutablePointer<CChar>? = language.whisperCode.flatMap { strdup($0) }
         let cPrompt: UnsafeMutablePointer<CChar>? = config.initialPrompt.isEmpty ? nil : strdup(config.initialPrompt)
+        let cVadPath: UnsafeMutablePointer<CChar>? = config.vadModelPath.flatMap { strdup($0) }
         defer {
             free(cLanguage)
             free(cPrompt)
+            free(cVadPath)
         }
         params.language = UnsafePointer(cLanguage)
         params.initial_prompt = UnsafePointer(cPrompt)
+
+        if config.vadEnabled, let cVadPath {
+            // vadModelPath est résolu côté MainActor : non-nil ⟹ le fichier existe.
+            params.vad = true
+            params.vad_model_path = UnsafePointer(cVadPath)
+            params.vad_params = whisper_vad_default_params()
+        }
 
         var result: Int32 = 0
         samples.withUnsafeBufferPointer { buf in
