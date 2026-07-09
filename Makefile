@@ -1,4 +1,7 @@
-.PHONY: build dmg clean setup sparkle-tools
+.PHONY: build dmg clean setup sparkle-tools release
+
+release: sparkle-tools
+	./scripts/release.sh $(VERSION)
 
 SPARKLE_VERSION = 2.6.4
 
