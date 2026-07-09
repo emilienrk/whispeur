@@ -2,6 +2,7 @@
 
 setup:
 	./build-whisper.sh
+	./scripts/generate-engine-info.sh
 	xcodegen generate
 
 build: setup

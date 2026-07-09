@@ -170,6 +170,37 @@ struct EngineSection: View {
                         .foregroundStyle(.white.opacity(0.25))
                 }
             }
+
+            // MARK: - Engine info
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionHeader(icon: "info.circle.fill", title: "Moteur whisper.cpp")
+
+                    HStack {
+                        Text("Version")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.7))
+                        Spacer()
+                        Text(verbatim: String(cString: whisper_version()))
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+
+                    HStack {
+                        Text("Commit")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.7))
+                        Spacer()
+                        Text(verbatim: EngineBuildInfo.whisperCommit)
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+
+                    Text("Le moteur est intégré à l'app : il se met à jour avec les mises à jour de Whispeur.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+            }
         }
     }
 }
