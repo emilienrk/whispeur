@@ -8,3 +8,5 @@ build/
 *.dmg
 Whispeur.dmg
 Whispeur/Generated/
+tools/
+releases/

@@ -149,6 +149,11 @@ final class StatusBarController: NSObject {
         historyItem.image = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)
         menu.addItem(historyItem)
         
+        let updateItem = NSMenuItem(title: String(localized: "Vérifier les mises à jour…"), action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        updateItem.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
+        menu.addItem(updateItem)
+
         let settingsItem = NSMenuItem(title: String(localized: "Paramètres…"), action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
@@ -284,6 +289,10 @@ final class StatusBarController: NSObject {
         logger.debug("Selecting favorite model: \(filename)")
         settings.selectedModelFilename = filename
         coordinator.modelURL = descriptor.localURL
+    }
+
+    @objc private func checkForUpdates() {
+        UpdaterService.shared.checkForUpdates()
     }
 
     @objc func openSettings() {
