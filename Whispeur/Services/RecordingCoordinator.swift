@@ -171,15 +171,7 @@ final class RecordingCoordinator {
     private func runTranscriptionAndPaste(samples: [Float]) async {
         // Phase 2: Transcription
         pipelineState = .transcribing
-        let s = AppSettings.shared
-        let engineConfig = WhisperEngineConfig(
-            useBeamSearch: s.useBeamSearch,
-            beamSize: s.beamSize,
-            temperature: Float(s.temperature),
-            noSpeechThreshold: Float(s.noSpeechThreshold),
-            conditionOnPreviousText: s.conditionOnPreviousText,
-            useGPU: s.useGPU
-        )
+        let engineConfig = AppSettings.shared.engineConfig
         let text: String
         do {
             text = try await whisperService.transcribe(samples: samples, config: engineConfig)

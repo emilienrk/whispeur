@@ -97,6 +97,28 @@ struct GeneralSection: View {
                 }
             }
 
+            // MARK: - Updates
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(icon: "arrow.down.circle.fill", title: "Mises à jour")
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Whispeur \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?")")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.9))
+                            Text("Les mises à jour incluent le moteur whisper.cpp intégré.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.35))
+                        }
+                        Spacer()
+                        Button("Vérifier…") {
+                            UpdaterService.shared.checkForUpdates()
+                        }
+                    }
+                }
+            }
+
             // MARK: - Interface
             SettingsCard {
                 VStack(alignment: .leading, spacing: 14) {

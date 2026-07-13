@@ -78,6 +78,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Start global hotkey listener.
         sc.hotkeyManager.startListening()
+
+        // Démarre Sparkle (checks automatiques + manuels).
+        UpdaterService.shared.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
