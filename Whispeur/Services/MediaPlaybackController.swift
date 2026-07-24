@@ -41,6 +41,11 @@ final class MediaPlaybackController {
 
     /// True while a player is paused *by us* and is owed a resume.
     private(set) var didPause = false
+    /// Bumped by every pause. A resume that was still settling when the next
+    /// dictation began belongs to the previous one and must stay silent.
+    private var generation = 0
+    /// True between the start of a resume and the end of its settle delay.
+    private var resumePending = false
 
     init(
         probe: SystemAudioProbe,
@@ -57,6 +62,16 @@ final class MediaPlaybackController {
     /// Call before opening the microphone, so the probe reading is not polluted
     /// by our own capture device.
     func pauseForRecording() {
+        generation &+= 1
+
+        // A resume from the previous dictation may still be settling. The media
+        // is already paused by us, so drop that resume and keep the debt.
+        if resumePending {
+            resumePending = false
+            didPause = true
+            return
+        }
+
         guard isEnabled(), probe.isOutputActive else {
             didPause = false
             return
@@ -70,8 +85,14 @@ final class MediaPlaybackController {
     func resumeAfterRecording() async {
         guard didPause else { return }
         didPause = false
+        resumePending = true
+        let generationAtResume = generation
 
         try? await Task.sleep(for: resumeSettleDelay)
+
+        // A new dictation took ownership of the media state while we settled.
+        guard generationAtResume == generation else { return }
+        resumePending = false
 
         // Sound still coming out means nobody obeyed our pause (a call app), or
         // another source is talking over it. Either way, sending Play would

@@ -25,7 +25,8 @@ private final class FakeMediaKeySender: MediaKeySender {
 @MainActor
 private func makeController(
     readings: [Bool],
-    enabled: Bool = true
+    enabled: Bool = true,
+    settleDelay: Duration = .zero
 ) -> (MediaPlaybackController, FakeAudioProbe, FakeMediaKeySender) {
     let probe = FakeAudioProbe(readings)
     let sender = FakeMediaKeySender()
@@ -33,7 +34,7 @@ private func makeController(
         probe: probe,
         keySender: sender,
         isEnabled: { enabled },
-        resumeSettleDelay: .zero
+        resumeSettleDelay: settleDelay
     )
     return (controller, probe, sender)
 }
@@ -103,5 +104,26 @@ struct MediaPlaybackControllerTests {
 
         #expect(probe.readCount == 0)
         #expect(sender.sendCount == 0)
+    }
+
+    @Test("A dictation starting mid-resume keeps the media paused and silences the stale resume")
+    func newPauseDuringSettleKeepsMediaPaused() async {
+        let (controller, _, sender) = makeController(
+            readings: [true, false],
+            settleDelay: .milliseconds(50)
+        )
+        controller.pauseForRecording()
+        #expect(sender.sendCount == 1)
+
+        let settling = Task { await controller.resumeAfterRecording() }
+        await Task.yield()
+
+        // Second dictation starts before the resume finished settling.
+        controller.pauseForRecording()
+        #expect(controller.didPause == true)
+        #expect(sender.sendCount == 1)
+
+        await settling.value
+        #expect(sender.sendCount == 1)
     }
 }
