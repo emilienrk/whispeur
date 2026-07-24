@@ -6,13 +6,20 @@ import Testing
 @MainActor
 private final class FakeAudioProbe: SystemAudioProbe {
     private var readings: [Bool]
+    private var lastReading = false
     private(set) var readCount = 0
 
     init(_ readings: [Bool]) { self.readings = readings }
 
     var isOutputActive: Bool {
         readCount += 1
-        return readings.isEmpty ? false : readings.removeFirst()
+        // Bounded polling can outlast a fixed queue of readings; repeat the last
+        // one instead of falling back to false, so "sound never stops" stays
+        // deterministic across every poll.
+        if !readings.isEmpty {
+            lastReading = readings.removeFirst()
+        }
+        return lastReading
     }
 }
 
@@ -26,7 +33,8 @@ private final class FakeMediaKeySender: MediaKeySender {
 private func makeController(
     readings: [Bool],
     enabled: Bool = true,
-    settleDelay: Duration = .zero
+    pollInterval: Duration = .milliseconds(1),
+    timeout: Duration = .milliseconds(50)
 ) -> (MediaPlaybackController, FakeAudioProbe, FakeMediaKeySender) {
     let probe = FakeAudioProbe(readings)
     let sender = FakeMediaKeySender()
@@ -34,7 +42,8 @@ private func makeController(
         probe: probe,
         keySender: sender,
         isEnabled: { enabled },
-        resumeSettleDelay: settleDelay
+        resumePollInterval: pollInterval,
+        resumeTimeout: timeout
     )
     return (controller, probe, sender)
 }
@@ -73,7 +82,26 @@ struct MediaPlaybackControllerTests {
 
         await controller.resumeAfterRecording()
         #expect(sender.sendCount == 1)
-        #expect(controller.didPause == false)
+        // The resume gave up without proof the sound stopped, so the debt
+        // stands — the next dictation must not blindly re-toggle the key.
+        #expect(controller.didPause == true)
+    }
+
+    @Test("A standing resume debt stops the next dictation from re-toggling the key")
+    func standingDebtPreventsBlindRetoggle() async {
+        let (controller, _, sender) = makeController(readings: [true, true])
+        controller.pauseForRecording()
+        #expect(sender.sendCount == 1)
+
+        await controller.resumeAfterRecording()
+        #expect(controller.didPause == true)
+        #expect(sender.sendCount == 1)
+
+        // Second dictation while the other source is still making noise: the
+        // media is already paused by us, so the key must stay untouched.
+        controller.pauseForRecording()
+        #expect(controller.didPause == true)
+        #expect(sender.sendCount == 1)
     }
 
     @Test("Setting disabled: the probe is never even read")
@@ -110,13 +138,16 @@ struct MediaPlaybackControllerTests {
     func newPauseDuringSettleKeepsMediaPaused() async {
         let (controller, _, sender) = makeController(
             readings: [true, false],
-            settleDelay: .milliseconds(50)
+            pollInterval: .milliseconds(50)
         )
         controller.pauseForRecording()
         #expect(sender.sendCount == 1)
 
         let settling = Task { await controller.resumeAfterRecording() }
-        await Task.yield()
+        // didPause flips to false as the very first thing resumeAfterRecording
+        // does, before it ever suspends — wait for that instead of assuming a
+        // FIFO scheduling order between this task and the one above.
+        while controller.didPause { await Task.yield() }
 
         // Second dictation starts before the resume finished settling.
         controller.pauseForRecording()
@@ -124,6 +155,8 @@ struct MediaPlaybackControllerTests {
         #expect(sender.sendCount == 1)
 
         await settling.value
+        // The debt survived the stale resume — that's the behavior under test.
+        #expect(controller.didPause == true)
         #expect(sender.sendCount == 1)
     }
 }

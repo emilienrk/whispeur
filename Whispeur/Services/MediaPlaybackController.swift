@@ -37,7 +37,8 @@ final class MediaPlaybackController {
     private let probe: SystemAudioProbe
     private let keySender: MediaKeySender
     private let isEnabled: @MainActor () -> Bool
-    private let resumeSettleDelay: Duration
+    private let resumePollInterval: Duration
+    private let resumeTimeout: Duration
 
     /// True while a player is paused *by us* and is owed a resume.
     private(set) var didPause = false
@@ -51,12 +52,14 @@ final class MediaPlaybackController {
         probe: SystemAudioProbe,
         keySender: MediaKeySender,
         isEnabled: @escaping @MainActor () -> Bool,
-        resumeSettleDelay: Duration = .milliseconds(120)
+        resumePollInterval: Duration = .milliseconds(50),
+        resumeTimeout: Duration = .seconds(1)
     ) {
         self.probe = probe
         self.keySender = keySender
         self.isEnabled = isEnabled
-        self.resumeSettleDelay = resumeSettleDelay
+        self.resumePollInterval = resumePollInterval
+        self.resumeTimeout = resumeTimeout
     }
 
     /// Call before opening the microphone, so the probe reading is not polluted
@@ -64,9 +67,10 @@ final class MediaPlaybackController {
     func pauseForRecording() {
         generation &+= 1
 
-        // A resume from the previous dictation may still be settling. The media
-        // is already paused by us, so drop that resume and keep the debt.
-        if resumePending {
+        // A resume may still be settling, or we may already hold a resume debt
+        // from an earlier dictation. Either way the media is paused by us, and
+        // the Play/Pause key would start it rather than stop it.
+        if resumePending || didPause {
             resumePending = false
             didPause = true
             return
@@ -88,17 +92,29 @@ final class MediaPlaybackController {
         resumePending = true
         let generationAtResume = generation
 
-        try? await Task.sleep(for: resumeSettleDelay)
+        // A single reading is a coin flip: closing the mic can restart a shared
+        // input/output device (AirPods switching Bluetooth profile), and a player
+        // needs a moment to release its IOProc. Poll until the output really goes
+        // quiet, and only then claim the pause worked.
+        let deadline = ContinuousClock.now + resumeTimeout
+        while ContinuousClock.now < deadline {
+            try? await Task.sleep(for: resumePollInterval)
 
-        // A new dictation took ownership of the media state while we settled.
-        guard generationAtResume == generation else { return }
+            // A new dictation took ownership of the media state while we polled.
+            guard generationAtResume == generation else { return }
+
+            if !probe.isOutputActive {
+                resumePending = false
+                keySender.sendPlayPause()
+                return
+            }
+        }
+
+        // Still noisy: nobody obeyed our pause, or another source is talking over
+        // it. Sending Play would start something the user never asked for, so keep
+        // the debt for a later dictation to settle.
         resumePending = false
-
-        // Sound still coming out means nobody obeyed our pause (a call app), or
-        // another source is talking over it. Either way, sending Play would
-        // start something the user never asked for.
-        guard !probe.isOutputActive else { return }
-        keySender.sendPlayPause()
+        didPause = true
     }
 }
 
@@ -141,9 +157,10 @@ struct CoreAudioOutputProbe: SystemAudioProbe {
     }
 }
 
-/// Posts the system Play/Pause media key. Uses the same CGEvent path as
-/// ClipboardService, so the Accessibility permission the app already holds is
-/// enough — no new prompt.
+/// Posts the system Play/Pause media key. Relies on the Accessibility
+/// permission the app already holds, so no new prompt is needed — posting a
+/// media key still requires it even though this goes through the HID event
+/// tap rather than the session tap ClipboardService uses.
 struct SystemMediaKeySender: MediaKeySender {
 
     /// NX_KEYTYPE_PLAY from IOKit's hidsystem/ev_keymap.h.

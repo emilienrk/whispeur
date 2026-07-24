@@ -60,37 +60,82 @@ Spotify démarrant tout seul.
 transcription :**
 
 1. `didPause == false` → ne rien faire.
-2. Remettre `didPause = false` immédiatement (idempotence).
-3. Attendre 120 ms que l'appareil de capture se referme.
-4. La sonde dit « du son sort encore » → personne n'avait obéi, ou une autre
-   source parle → **n'envoyer aucune touche**.
-5. Sinon → envoyer Play/Pause.
+2. Remettre `didPause = false` immédiatement (idempotence), poser
+   `resumePending = true`.
+3. Sonder la sortie par intervalles de `resumePollInterval` (50 ms) jusqu'à
+   `resumeTimeout` (1 s) après la fermeture du micro.
+4. Dès qu'une lecture dit « plus rien ne sort » → envoyer Play/Pause, arrêter le
+   sondage.
+5. Le délai expire toujours bruyant → personne n'avait obéi, ou une autre
+   source parle → **n'envoyer aucune touche**, et **garder la dette**
+   (`didPause` repasse à `true`) pour que la prochaine dictée sache que le
+   média est déjà en pause de son fait.
+
+Une seule lecture à échéance fixe s'est révélée être un pari : fermer le micro
+peut faire redémarrer un appareil d'entrée/sortie partagé (les AirPods changent
+de profil Bluetooth HFP → A2DP au relâchement du micro), et
+`kAudioDevicePropertyDeviceIsRunningSomewhere` reste vrai bien après une
+fenêtre de 120 ms — la musique ne repartait jamais sur le matériel même que ce
+document cite en exemple. Le sondage borné laisse à l'appareil le temps de se
+stabiliser sans pour autant attendre indéfiniment.
 
 ### Pourquoi la vérification se fait à la reprise et non pendant
 
-Une re-vérification « 300 ms après la pause » serait fausse dès que l'entrée et
+Une re-vérification pendant l'enregistrement serait fausse dès que l'entrée et
 la sortie sont le même appareil (AirPods, casque USB, appareil agrégé) :
 CoreAudio les expose comme un seul objet, et le micro ouvert par Whispeur suffit
 à le faire compter comme « en train de tourner ». La musique ne repartirait
 jamais.
 
-En plaçant les deux seules lectures CoreAudio aux moments où le micro est fermé
-— avant l'ouverture, et 120 ms après la fermeture — aucune mesure n'est polluée
-par notre propre capture. Même garantie anti-Zoom, sans latence ni cas
-particulier.
+En plaçant les lectures CoreAudio aux moments où le micro est fermé — avant
+l'ouverture, et par sondages après la fermeture — aucune mesure n'est polluée
+par notre propre capture. Même garantie anti-Zoom, sans cas particulier.
+
+### La dette de reprise
+
+`didPause` n'est pas qu'un drapeau d'idempotence : c'est une dette. Tant
+qu'elle est due (parce qu'une reprise a expiré sans preuve de silence, ou
+qu'une reprise est encore en train de sonder), le média est considéré comme
+« en pause par nous », et une nouvelle dictée ne doit **jamais** rebasculer la
+touche à l'aveugle — elle démarrerait un lecteur que Whispeur venait tout juste
+de mettre en pause. `pauseForRecording()` vérifie donc `resumePending ||
+didPause` **avant** de regarder si le réglage est actif : une dette se solde
+même si l'utilisateur désactive le réglage entre deux dictées.
 
 ### Comportement par situation
+
+La touche Play/Pause n'est **jamais ignorée** par macOS : elle est routée vers
+l'app *now playing* du système (celle que Control Center désignerait). Si
+cette app est en pause au moment où la touche arrive, elle **démarre** — c'est
+la source du cas résiduel ci-dessous.
 
 | Situation | Pause | Reprise |
 |---|---|---|
 | Rien ne joue | aucune touche | aucune touche |
 | Spotify / YouTube / VLC | pause | play |
-| Appel Zoom / Teams seul | touche envoyée, ignorée par l'app | aucune touche |
+| Appel Zoom / Teams seul, aucune app *now playing* en pause | touche routée vers l'app now-playing, sans effet audible | aucune touche |
 | Musique **et** Zoom | musique mise en pause | aucune touche — la musique reste coupée |
 
 Le dernier cas est un compromis assumé : aucune API publique ne permet de
 savoir *quelle* application produit du son. Le mode de défaillance choisi est
 de ne jamais démarrer un lecteur que l'utilisateur n'a pas lancé.
+
+#### Limite résiduelle assumée
+
+Si un lecteur est ouvert **et en pause** (donc silencieux, la sonde ne le voit
+pas) au moment où une dictée démarre pendant un appel visio, la touche
+Play/Pause — routée vers cette app puisqu'elle est la *now playing* du
+système — la **démarre**. Whispeur ne peut pas distinguer « aucune app now
+playing » de « une app now playing en pause » avant d'envoyer la touche : les
+deux se présentent comme un silence côté sonde CoreAudio.
+
+Ce cas ne se reproduit pas aux dictées suivantes du même appel : la sonde
+constate alors que le lecteur fait du bruit, `pauseForRecording()` envoie la
+touche pour le remettre en pause, et la dette de reprise (voir plus haut)
+retient le contrôleur de le redémarrer à l'aveugle par la suite. Seule la
+**toute première** dictée de l'appel est affectée. Ce compromis a été examiné
+et validé par le porteur du projet — aucune API publique ne permet de lever
+cette ambiguïté avant d'agir.
 
 ## Composants
 
@@ -151,10 +196,15 @@ un émetteur simulés :
 
 - rien ne joue → 0 touche envoyée
 - ça joue, silence à la reprise → 2 touches (pause puis play)
-- ça joue, ça joue toujours à la reprise → 1 touche (cas Zoom)
+- ça joue, ça joue toujours à la reprise → 1 touche (cas Zoom), et la dette
+  (`didPause`) est conservée
+- une dette de reprise en cours empêche la dictée suivante de rebasculer la
+  touche à l'aveugle
 - réglage désactivé → 0 touche
 - `resumeAfterRecording()` appelé deux fois → 1 seule touche
 - `resumeAfterRecording()` sans pause préalable → 0 touche
+- une dictée qui démarre pendant le sondage d'une reprise garde le média en
+  pause et rend muette la reprise devenue obsolète
 
 `PipelineStateTests` est ajusté si la nouvelle injection casse la construction
 du coordinator.
