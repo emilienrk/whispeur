@@ -30,6 +30,11 @@ final class ServicesContainer: ObservableObject {
     let audioCapture     = AudioCaptureService()
     let whisperService   = WhisperService()
     let clipboardService = ClipboardService()
+    let mediaPlayback = MediaPlaybackController(
+        probe: CoreAudioOutputProbe(),
+        keySender: SystemMediaKeySender(),
+        isEnabled: { AppSettings.shared.pauseMediaWhileRecording }
+    )
 
     private(set) lazy var coordinator: RecordingCoordinator = {
         RecordingCoordinator(
@@ -37,7 +42,8 @@ final class ServicesContainer: ObservableObject {
             audioCapture: audioCapture,
             whisperService: whisperService,
             clipboardService: clipboardService,
-            historyService: historyService
+            historyService: historyService,
+            mediaPlayback: mediaPlayback
         )
     }()
 }

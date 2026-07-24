@@ -49,6 +49,7 @@ final class RecordingCoordinator {
     let whisperService: WhisperService
     let clipboardService: ClipboardService
     let historyService: HistoryService
+    let mediaPlayback: MediaPlaybackController
 
     // MARK: Configuration
 
@@ -73,13 +74,15 @@ final class RecordingCoordinator {
         audioCapture: AudioCaptureService,
         whisperService: WhisperService,
         clipboardService: ClipboardService,
-        historyService: HistoryService
+        historyService: HistoryService,
+        mediaPlayback: MediaPlaybackController
     ) {
         self.hotkeyManager  = hotkeyManager
         self.audioCapture   = audioCapture
         self.whisperService = whisperService
         self.clipboardService = clipboardService
         self.historyService = historyService
+        self.mediaPlayback  = mediaPlayback
 
         configureHotkeyCallbacks()
     }
@@ -130,6 +133,10 @@ final class RecordingCoordinator {
         unloadTask?.cancel()
         unloadTask = nil
 
+        // Pause before the mic opens: once capture runs, a shared input/output
+        // device (AirPods) would read as "playing" no matter what.
+        mediaPlayback.pauseForRecording()
+
         // --- Start audio immediately ---
         do {
             try audioCapture.startRecording()
@@ -158,6 +165,11 @@ final class RecordingCoordinator {
         guard pipelineState == .recording || pipelineState == .loadingModel else { return }
 
         let samples = audioCapture.stopRecording()
+
+        // Resume right away rather than after transcription — a large model can
+        // take seconds, and the silence is noticeable.
+        Task { await mediaPlayback.resumeAfterRecording() }
+
         guard !samples.isEmpty else {
             pipelineState = .idle
             unloadModel()
@@ -228,6 +240,7 @@ final class RecordingCoordinator {
         lastError = message
         pipelineState = .error(message)
         logger.error("Pipeline error: \(message)")
+        Task { await mediaPlayback.resumeAfterRecording() }
         // Auto-reset to idle after a short delay so the UI recovers.
         Task {
             try? await Task.sleep(for: .seconds(3))
