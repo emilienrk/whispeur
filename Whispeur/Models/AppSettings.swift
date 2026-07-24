@@ -35,6 +35,7 @@ final class AppSettings {
         _autoPasteEnabled      = (ud.object(forKey: "autoPaste") as? Bool) ?? true
         _launchAtLogin         = (ud.object(forKey: "launchAtLogin") as? Bool) ?? false
         _confirmationSound     = (ud.object(forKey: "confirmationSound") as? Bool) ?? false
+        _pauseMediaWhileRecording = (ud.object(forKey: "pauseMediaWhileRecording") as? Bool) ?? true
         _useBeamSearch         = (ud.object(forKey: "useBeamSearch") as? Bool) ?? false
         _beamSize              = (ud.object(forKey: "beamSize") as? Int) ?? 5
         _temperature           = (ud.object(forKey: "temperature") as? Double) ?? 0.0
@@ -137,6 +138,15 @@ final class AppSettings {
     var confirmationSoundEnabled: Bool {
         get { _confirmationSound }
         set { _confirmationSound = newValue }
+    }
+
+    private var _pauseMediaWhileRecording: Bool {
+        didSet { UserDefaults.standard.set(_pauseMediaWhileRecording, forKey: "pauseMediaWhileRecording") }
+    }
+    /// Pause whatever is playing while a dictation runs, then resume it afterwards.
+    var pauseMediaWhileRecording: Bool {
+        get { _pauseMediaWhileRecording }
+        set { _pauseMediaWhileRecording = newValue }
     }
 
     // MARK: - Engine (Whisper params)

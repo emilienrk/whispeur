@@ -64,4 +64,19 @@ struct EngineConfigTests {
             #expect(s.engineConfig.vadModelPath == nil)
         }
     }
+
+    @Test("pauseMediaWhileRecording round-trips through UserDefaults")
+    func pauseMediaWhileRecordingPersists() {
+        let s = AppSettings.shared
+        let saved = s.pauseMediaWhileRecording
+        defer { s.pauseMediaWhileRecording = saved }
+
+        s.pauseMediaWhileRecording = false
+        #expect(s.pauseMediaWhileRecording == false)
+        #expect(UserDefaults.standard.bool(forKey: "pauseMediaWhileRecording") == false)
+
+        s.pauseMediaWhileRecording = true
+        #expect(s.pauseMediaWhileRecording == true)
+        #expect(UserDefaults.standard.bool(forKey: "pauseMediaWhileRecording") == true)
+    }
 }
