@@ -1,0 +1,80 @@
+// MediaPlaybackController.swift
+// Whispeur
+//
+// Pauses whatever is playing while a dictation runs, then resumes it.
+//
+// The Play/Pause media key is a blind toggle: nothing tells us whether a player
+// actually received it. So we only send Play once we have proof the sound
+// stopped — otherwise ending a Zoom call would start Spotify out of nowhere.
+//
+// Both CoreAudio readings happen while the microphone is closed (before capture
+// starts, and after it stops). On AirPods or any device that is both input and
+// output, a reading taken during capture would always report "running" because
+// of our own microphone, and the music would never resume.
+
+import Foundation
+
+// MARK: - Injected dependencies
+
+@MainActor
+protocol SystemAudioProbe {
+    /// Whether the default output device is currently performing I/O.
+    var isOutputActive: Bool { get }
+}
+
+@MainActor
+protocol MediaKeySender {
+    func sendPlayPause()
+}
+
+// MARK: - Controller
+
+@MainActor
+final class MediaPlaybackController {
+
+    private let probe: SystemAudioProbe
+    private let keySender: MediaKeySender
+    private let isEnabled: @MainActor () -> Bool
+    private let resumeSettleDelay: Duration
+
+    /// True while a player is paused *by us* and is owed a resume.
+    private(set) var didPause = false
+
+    init(
+        probe: SystemAudioProbe,
+        keySender: MediaKeySender,
+        isEnabled: @escaping @MainActor () -> Bool,
+        resumeSettleDelay: Duration = .milliseconds(120)
+    ) {
+        self.probe = probe
+        self.keySender = keySender
+        self.isEnabled = isEnabled
+        self.resumeSettleDelay = resumeSettleDelay
+    }
+
+    /// Call before opening the microphone, so the probe reading is not polluted
+    /// by our own capture device.
+    func pauseForRecording() {
+        guard isEnabled(), probe.isOutputActive else {
+            didPause = false
+            return
+        }
+        keySender.sendPlayPause()
+        didPause = true
+    }
+
+    /// Safe to call from every pipeline exit path — errors included. The
+    /// `didPause` guard makes repeated calls no-ops.
+    func resumeAfterRecording() async {
+        guard didPause else { return }
+        didPause = false
+
+        try? await Task.sleep(for: resumeSettleDelay)
+
+        // Sound still coming out means nobody obeyed our pause (a call app), or
+        // another source is talking over it. Either way, sending Play would
+        // start something the user never asked for.
+        guard !probe.isOutputActive else { return }
+        keySender.sendPlayPause()
+    }
+}
