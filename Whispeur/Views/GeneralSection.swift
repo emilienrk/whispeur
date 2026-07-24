@@ -80,6 +80,15 @@ struct GeneralSection: View {
                         description: "Émet un son bref quand la transcription est prête.",
                         isOn: $settings.confirmationSoundEnabled
                     )
+
+                    Divider().opacity(0.08)
+
+                    SettingsToggleRow(
+                        icon: "pause.circle.fill",
+                        label: "Mettre la musique en pause",
+                        description: "Coupe la lecture en cours pendant la dictée, puis la relance.",
+                        isOn: $settings.pauseMediaWhileRecording
+                    )
                 }
             }
 
