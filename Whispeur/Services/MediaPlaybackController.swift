@@ -13,6 +13,8 @@
 // of our own microphone, and the music would never resume.
 
 import Foundation
+import AppKit
+import CoreAudio
 
 // MARK: - Injected dependencies
 
@@ -76,5 +78,78 @@ final class MediaPlaybackController {
         // start something the user never asked for.
         guard !probe.isOutputActive else { return }
         keySender.sendPlayPause()
+    }
+}
+
+// MARK: - Real implementations
+
+/// Reports whether the default output device is performing I/O.
+/// Any CoreAudio failure is reported as "silent" so Whispeur stays passive.
+struct CoreAudioOutputProbe: SystemAudioProbe {
+
+    var isOutputActive: Bool {
+        guard let device = defaultOutputDevice() else { return false }
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var isRunning: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &isRunning)
+
+        guard status == noErr else { return false }
+        return isRunning != 0
+    }
+
+    private func defaultOutputDevice() -> AudioObjectID? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var deviceID = AudioObjectID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID
+        )
+
+        guard status == noErr, deviceID != AudioObjectID(kAudioObjectUnknown) else { return nil }
+        return deviceID
+    }
+}
+
+/// Posts the system Play/Pause media key. Uses the same CGEvent path as
+/// ClipboardService, so the Accessibility permission the app already holds is
+/// enough — no new prompt.
+struct SystemMediaKeySender: MediaKeySender {
+
+    /// NX_KEYTYPE_PLAY from IOKit's hidsystem/ev_keymap.h.
+    private static let playPauseKey: Int32 = 16
+
+    func sendPlayPause() {
+        post(keyDown: true)
+        post(keyDown: false)
+    }
+
+    private func post(keyDown: Bool) {
+        let state: Int32 = keyDown ? 0xA : 0xB
+        let data1 = Int((Self.playPauseKey << 16) | (state << 8))
+        let flags = NSEvent.ModifierFlags(rawValue: keyDown ? 0xA00 : 0xB00)
+
+        guard let event = NSEvent.otherEvent(
+            with: .systemDefined,
+            location: .zero,
+            modifierFlags: flags,
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            subtype: 8,
+            data1: data1,
+            data2: -1
+        ) else { return }
+
+        event.cgEvent?.post(tap: .cghidEventTap)
     }
 }
