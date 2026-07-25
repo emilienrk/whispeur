@@ -129,13 +129,22 @@ système — la **démarre**. Whispeur ne peut pas distinguer « aucune app now
 playing » de « une app now playing en pause » avant d'envoyer la touche : les
 deux se présentent comme un silence côté sonde CoreAudio.
 
-Ce cas ne se reproduit pas aux dictées suivantes du même appel : la sonde
-constate alors que le lecteur fait du bruit, `pauseForRecording()` envoie la
-touche pour le remettre en pause, et la dette de reprise (voir plus haut)
-retient le contrôleur de le redémarrer à l'aveugle par la suite. Seule la
-**toute première** dictée de l'appel est affectée. Ce compromis a été examiné
-et validé par le porteur du projet — aucune API publique ne permet de lever
-cette ambiguïté avant d'agir.
+Une fois le lecteur démarré par erreur, **Whispeur n'y retouche plus** : la
+dette de reprise est due, donc `pauseForRecording()` sort par sa garde avant
+d'envoyer quoi que ce soit, et la reprise ne trouve jamais le silence qu'elle
+exige. Le lecteur joue donc jusqu'à la fin de l'appel, et l'utilisateur doit
+l'arrêter lui-même.
+
+C'est délibéré. Une fois la dette due, deux situations se présentent de façon
+strictement identique au contrôleur — « musique correctement mise en pause,
+plus le bruit de l'appel » et « lecteur démarré par erreur, plus le bruit de
+l'appel » : dans les deux cas la dette est due et la sonde entend du son.
+Rebasculer la touche corrigerait la seconde mais casserait la première en
+redémarrant une musique que l'utilisateur voulait silencieuse. La garde protège
+le cas correct, au prix du cas déjà dégradé.
+
+Ce compromis a été examiné et validé par le porteur du projet — aucune API
+publique ne permet de lever l'ambiguïté avant d'agir.
 
 ## Composants
 
