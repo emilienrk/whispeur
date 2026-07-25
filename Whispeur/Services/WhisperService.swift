@@ -123,6 +123,46 @@ actor WhisperService {
             ? WHISPER_SAMPLING_BEAM_SEARCH
             : WHISPER_SAMPLING_GREEDY
 
+        // Les chaînes C doivent survivre à whisper_full : strdup + defer free
+        // évite l'imbrication de withCString pour plusieurs chaînes optionnelles.
+        let cLanguage: UnsafeMutablePointer<CChar>? = language.whisperCode.flatMap { strdup($0) }
+        let cPrompt: UnsafeMutablePointer<CChar>? = config.initialPrompt.isEmpty ? nil : strdup(config.initialPrompt)
+        let cVadPath: UnsafeMutablePointer<CChar>? = config.vadModelPath.flatMap { strdup($0) }
+        defer {
+            free(cLanguage)
+            free(cPrompt)
+            free(cVadPath)
+        }
+
+        let params = Self.makeParams(
+            config: config,
+            maxThreads: maxThreads,
+            strategy: strategy,
+            cLanguage: UnsafePointer(cLanguage),
+            cPrompt: UnsafePointer(cPrompt),
+            cVadPath: UnsafePointer(cVadPath)
+        )
+
+        var result: Int32 = 0
+        samples.withUnsafeBufferPointer { buf in
+            result = whisper_full(ctx, params, buf.baseAddress, Int32(buf.count))
+        }
+        if result != 0 { throw WhisperServiceError.transcriptionFailed }
+
+        return extractTranscription(from: ctx)
+    }
+
+    /// Maps the engine config onto whisper_full_params. Split out of `transcribe`
+    /// so the mapping can be tested without a loaded model.
+    /// The caller owns the C strings and must keep them alive across whisper_full.
+    nonisolated static func makeParams(
+        config: WhisperEngineConfig,
+        maxThreads: Int,
+        strategy: whisper_sampling_strategy,
+        cLanguage: UnsafePointer<CChar>?,
+        cPrompt: UnsafePointer<CChar>?,
+        cVadPath: UnsafePointer<CChar>?
+    ) -> whisper_full_params {
         var params = whisper_full_default_params(strategy)
         params.print_realtime   = false
         params.print_progress   = false
@@ -139,33 +179,21 @@ actor WhisperService {
             params.beam_search.beam_size = Int32(config.beamSize)
         }
 
-        // Les chaînes C doivent survivre à whisper_full : strdup + defer free
-        // évite l'imbrication de withCString pour plusieurs chaînes optionnelles.
-        let cLanguage: UnsafeMutablePointer<CChar>? = language.whisperCode.flatMap { strdup($0) }
-        let cPrompt: UnsafeMutablePointer<CChar>? = config.initialPrompt.isEmpty ? nil : strdup(config.initialPrompt)
-        let cVadPath: UnsafeMutablePointer<CChar>? = config.vadModelPath.flatMap { strdup($0) }
-        defer {
-            free(cLanguage)
-            free(cPrompt)
-            free(cVadPath)
-        }
-        params.language = UnsafePointer(cLanguage)
-        params.initial_prompt = UnsafePointer(cPrompt)
+        params.language = cLanguage
+        params.initial_prompt = cPrompt
+        // Without this the prompt goes into the rolling context buffer, where decoded
+        // text pushes it out once the 224-token budget is reached — so a long dictation
+        // loses the custom vocabulary halfway through. Carrying pins it to every window.
+        params.carry_initial_prompt = cPrompt != nil
 
         if config.vadEnabled, let cVadPath {
             // vadModelPath est résolu côté MainActor : non-nil ⟹ le fichier existe.
             params.vad = true
-            params.vad_model_path = UnsafePointer(cVadPath)
+            params.vad_model_path = cVadPath
             params.vad_params = whisper_vad_default_params()
         }
 
-        var result: Int32 = 0
-        samples.withUnsafeBufferPointer { buf in
-            result = whisper_full(ctx, params, buf.baseAddress, Int32(buf.count))
-        }
-        if result != 0 { throw WhisperServiceError.transcriptionFailed }
-
-        return extractTranscription(from: ctx)
+        return params
     }
 
     private func extractTranscription(from ctx: OpaquePointer) -> String {

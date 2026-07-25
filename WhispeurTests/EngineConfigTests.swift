@@ -79,4 +79,53 @@ struct EngineConfigTests {
         #expect(s.pauseMediaWhileRecording == true)
         #expect(UserDefaults.standard.bool(forKey: "pauseMediaWhileRecording") == true)
     }
+
+    @Test("a non-empty prompt is carried to every decode window")
+    func promptIsCarried() {
+        let prompt = strdup("Whispeur, xcodegen, ggml")
+        defer { free(prompt) }
+
+        var config = WhisperEngineConfig.default
+        config.initialPrompt = "Whispeur, xcodegen, ggml"
+
+        let params = WhisperService.makeParams(
+            config: config,
+            maxThreads: 4,
+            strategy: WHISPER_SAMPLING_GREEDY,
+            cLanguage: nil,
+            cPrompt: UnsafePointer(prompt),
+            cVadPath: nil
+        )
+
+        #expect(params.initial_prompt != nil)
+        #expect(params.carry_initial_prompt == true)
+    }
+
+    @Test("each preset stands alone within the prompt budget")
+    func presetsFitTheBudget() {
+        #expect(PromptPreset.all.isEmpty == false)
+
+        for preset in PromptPreset.all {
+            #expect(preset.text.isEmpty == false)
+            #expect(preset.text.count <= PromptPreset.approximateCharacterBudget)
+        }
+
+        let titles = Set(PromptPreset.all.map(\.title))
+        #expect(titles.count == PromptPreset.all.count)
+    }
+
+    @Test("an empty prompt leaves carry_initial_prompt off")
+    func emptyPromptIsNotCarried() {
+        let params = WhisperService.makeParams(
+            config: .default,
+            maxThreads: 4,
+            strategy: WHISPER_SAMPLING_GREEDY,
+            cLanguage: nil,
+            cPrompt: nil,
+            cVadPath: nil
+        )
+
+        #expect(params.initial_prompt == nil)
+        #expect(params.carry_initial_prompt == false)
+    }
 }

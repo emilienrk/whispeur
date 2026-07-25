@@ -95,10 +95,34 @@ struct EngineSection: View {
                 }
             }
 
-            // MARK: - Initial prompt
+            // MARK: - Vocabulary & style
             SettingsCard {
                 VStack(alignment: .leading, spacing: 10) {
-                    SectionHeader(icon: "text.quote", title: "Prompt initial")
+                    HStack {
+                        SectionHeader(icon: "text.quote", title: "Vocabulaire & style")
+                        Spacer()
+                        Menu {
+                            ForEach(PromptPreset.all) { preset in
+                                Button {
+                                    append(preset)
+                                } label: {
+                                    Text(verbatim: preset.title)
+                                    Text(verbatim: preset.subtitle)
+                                }
+                            }
+                            if !settings.initialPrompt.isEmpty {
+                                Divider()
+                                Button("Vider le champ", role: .destructive) {
+                                    settings.initialPrompt = ""
+                                }
+                            }
+                        } label: {
+                            Label("Exemples", systemImage: "sparkles")
+                                .font(.system(size: 12))
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                    }
 
                     TextEditor(text: $settings.initialPrompt)
                         .font(.system(size: 13))
@@ -113,11 +137,32 @@ struct EngineSection: View {
                                         .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
                                 )
                         )
+                        .overlay(alignment: .topLeading) {
+                            if settings.initialPrompt.isEmpty {
+                                Text(Self.promptPlaceholder)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.white.opacity(0.25))
+                                    .padding(.horizontal, 11)
+                                    .padding(.vertical, 14)
+                                    .allowsHitTesting(false)
+                            }
+                        }
 
-                    Text("Donné au modèle comme contexte avant chaque dictée : vocabulaire spécifique, noms propres, style de ponctuation. Vide = désactivé.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.3))
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("Whisper n'obéit pas à des consignes : il imite ce qu'il lit ici. Écris donc des exemples, pas des ordres — les noms propres et le jargon à reconnaître, et une phrase ponctuée comme tu veux la sortie. Vide = désactivé.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.3))
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Spacer(minLength: 0)
+
+                        if !settings.initialPrompt.isEmpty {
+                            Text(verbatim: "\(settings.initialPrompt.count) / ≈\(PromptPreset.approximateCharacterBudget)")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(isPromptOverBudget ? .orange : .white.opacity(0.3))
+                                .help("Au-delà, whisper.cpp coupe le début du texte.")
+                        }
+                    }
                 }
             }
 
@@ -203,6 +248,22 @@ struct EngineSection: View {
             }
         }
     }
+
+    private var isPromptOverBudget: Bool {
+        settings.initialPrompt.count > PromptPreset.approximateCharacterBudget
+    }
+
+    /// Presets are additive: the prompt is just concatenated context, so combining a
+    /// vocabulary preset with a style one is valid — and appending never eats what the
+    /// user already typed.
+    private func append(_ preset: PromptPreset) {
+        let current = settings.initialPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        settings.initialPrompt = current.isEmpty ? preset.text : current + "\n" + preset.text
+    }
+
+    /// Shows the intended usage by example, since the field steers by imitation.
+    private static let promptPlaceholder =
+        "Whispeur, xcodegen, Sparkle, nix-darwin, OrbStack. Voici une phrase ponctuée normalement, avec des virgules et un point final."
 }
 
 // MARK: - Decoding mode row
