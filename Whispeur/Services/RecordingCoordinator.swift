@@ -133,8 +133,8 @@ final class RecordingCoordinator {
         unloadTask?.cancel()
         unloadTask = nil
 
-        // Pause before the mic opens: once capture runs, a shared input/output
-        // device (AirPods) would read as "playing" no matter what.
+        // Reads audio per process and skips our own, so opening the mic right
+        // after cannot pollute the reading. Returns before the key is verified.
         mediaPlayback.pauseForRecording()
 
         // --- Start audio immediately ---

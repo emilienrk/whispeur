@@ -31,7 +31,7 @@ final class ServicesContainer: ObservableObject {
     let whisperService   = WhisperService()
     let clipboardService = ClipboardService()
     let mediaPlayback = MediaPlaybackController(
-        probe: CoreAudioOutputProbe(),
+        probe: CoreAudioProcessProbe(),
         keySender: SystemMediaKeySender(),
         isEnabled: { AppSettings.shared.pauseMediaWhileRecording }
     )

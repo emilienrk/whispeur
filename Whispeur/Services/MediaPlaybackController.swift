@@ -3,26 +3,21 @@
 //
 // Pauses whatever is playing while a dictation runs, then resumes it.
 //
-// The Play/Pause media key is a blind toggle: nothing tells us whether a player
-// actually received it. So we only send Play once we have proof the sound
-// stopped — otherwise ending a Zoom call would start Spotify out of nowhere.
+// Two rules decide everything here:
 //
-// Both CoreAudio readings happen while the microphone is closed (before capture
-// starts, and after it stops). On AirPods or any device that is both input and
-// output, a reading taken during capture would always report "running" because
-// of our own microphone, and the music would never resume.
+// 1. Whispeur only acts when it can see a player actually feeding the output.
+//    A player that is open but paused feeds nothing, so it is invisible, so it
+//    is left alone — it must never be woken up by a dictation.
+// 2. A call in progress means hands off entirely, music included. Interrupting
+//    a conversation is worse than leaving a track running for a few seconds.
+//
+// The Play/Pause media key is a blind toggle routed to the system's now-playing
+// app, which is not necessarily the process we saw playing. Seeing audio
+// per process makes that toggle checkable: if the key woke a player instead of
+// pausing one, a process that was silent is suddenly playing, and we undo it.
 
 import Foundation
 import AppKit
-import CoreAudio
-
-// MARK: - Injected dependencies
-
-@MainActor
-protocol SystemAudioProbe {
-    /// Whether the default output device is currently performing I/O.
-    var isOutputActive: Bool { get }
-}
 
 @MainActor
 protocol MediaKeySender {
@@ -34,128 +29,82 @@ protocol MediaKeySender {
 @MainActor
 final class MediaPlaybackController {
 
-    private let probe: SystemAudioProbe
+    private let probe: AudioProcessProbe
     private let keySender: MediaKeySender
     private let isEnabled: @MainActor () -> Bool
-    private let resumePollInterval: Duration
-    private let resumeTimeout: Duration
+    private let verifyDelay: Duration
 
     /// True while a player is paused *by us* and is owed a resume.
     private(set) var didPause = false
-    /// Bumped by every pause. A resume that was still settling when the next
-    /// dictation began belongs to the previous one and must stay silent.
-    private var generation = 0
-    /// True between the start of a resume and the end of its settle delay.
-    private var resumePending = false
+    private var verification: Task<Void, Never>?
 
+    /// `verifyDelay` covers the gap between the media key landing and the woken
+    /// player showing up as playing. Measured at 74-84 ms on this hardware, for
+    /// a process that had to be launched first; 400 ms is five times that.
     init(
-        probe: SystemAudioProbe,
+        probe: AudioProcessProbe,
         keySender: MediaKeySender,
         isEnabled: @escaping @MainActor () -> Bool,
-        resumePollInterval: Duration = .milliseconds(50),
-        resumeTimeout: Duration = .seconds(1)
+        verifyDelay: Duration = .milliseconds(400)
     ) {
         self.probe = probe
         self.keySender = keySender
         self.isEnabled = isEnabled
-        self.resumePollInterval = resumePollInterval
-        self.resumeTimeout = resumeTimeout
+        self.verifyDelay = verifyDelay
     }
 
-    /// Call before opening the microphone, so the probe reading is not polluted
-    /// by our own capture device.
+    /// Returns as soon as the key is sent — the check runs on its own, so
+    /// nothing is added to the delay before the microphone opens.
     func pauseForRecording() {
-        generation &+= 1
+        verification?.cancel()
+        verification = nil
 
-        // A resume may still be settling, or we may already hold a resume debt
-        // from an earlier dictation. Either way the media is paused by us, and
-        // the Play/Pause key would start it rather than stop it.
-        if resumePending || didPause {
-            resumePending = false
-            didPause = true
-            return
-        }
+        // Already paused by us and never resumed. The key would start playback
+        // rather than stop it, so keep the debt for the resume that follows.
+        guard !didPause, isEnabled() else { return }
 
-        guard isEnabled(), probe.isOutputActive else {
-            didPause = false
-            return
-        }
+        let playing = probe.outputtingProcesses()
+        guard !playing.isEmpty,
+              !playing.contains(where: { classify($0) == .communication })
+        else { return }
+
+        let playingBefore = Set(playing.map(\.pid))
         keySender.sendPlayPause()
         didPause = true
+
+        let delay = verifyDelay
+        verification = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self else { return }
+
+            // A process that was silent before the key is playing now: the
+            // toggle reached a paused player instead of the one we saw. Undo it
+            // and drop the debt, so the resume stays silent too.
+            let playingNow = Set(self.probe.outputtingProcesses().map(\.pid))
+            if !playingNow.subtracting(playingBefore).isEmpty {
+                self.keySender.sendPlayPause()
+                self.didPause = false
+            }
+        }
     }
 
     /// Safe to call from every pipeline exit path — errors included. The
     /// `didPause` guard makes repeated calls no-ops.
+    ///
+    /// Deliberately not conditioned on the paused player having gone quiet:
+    /// players keep their audio unit alive for seconds after a pause, so
+    /// demanding proof of silence would strand the music paused.
     func resumeAfterRecording() async {
+        if let verification { await verification.value }
+        verification = nil
+
         guard didPause else { return }
         didPause = false
-        resumePending = true
-        let generationAtResume = generation
-
-        // A single reading is a coin flip: closing the mic can restart a shared
-        // input/output device (AirPods switching Bluetooth profile), and a player
-        // needs a moment to release its IOProc. Poll until the output really goes
-        // quiet, and only then claim the pause worked.
-        let deadline = ContinuousClock.now + resumeTimeout
-        while ContinuousClock.now < deadline {
-            try? await Task.sleep(for: resumePollInterval)
-
-            // A new dictation took ownership of the media state while we polled.
-            guard generationAtResume == generation else { return }
-
-            if !probe.isOutputActive {
-                resumePending = false
-                keySender.sendPlayPause()
-                return
-            }
-        }
-
-        // Still noisy: nobody obeyed our pause, or another source is talking over
-        // it. Sending Play would start something the user never asked for, so keep
-        // the debt for a later dictation to settle.
-        resumePending = false
-        didPause = true
+        keySender.sendPlayPause()
     }
 }
 
-// MARK: - Real implementations
-
-/// Reports whether the default output device is performing I/O.
-/// Any CoreAudio failure is reported as "silent" so Whispeur stays passive.
-struct CoreAudioOutputProbe: SystemAudioProbe {
-
-    var isOutputActive: Bool {
-        guard let device = defaultOutputDevice() else { return false }
-
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var isRunning: UInt32 = 0
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &isRunning)
-
-        guard status == noErr else { return false }
-        return isRunning != 0
-    }
-
-    private func defaultOutputDevice() -> AudioObjectID? {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var deviceID = AudioObjectID(kAudioObjectUnknown)
-        var size = UInt32(MemoryLayout<AudioObjectID>.size)
-        let status = AudioObjectGetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID
-        )
-
-        guard status == noErr, deviceID != AudioObjectID(kAudioObjectUnknown) else { return nil }
-        return deviceID
-    }
-}
+// MARK: - Real implementation
 
 /// Posts the system Play/Pause media key. Relies on the Accessibility
 /// permission the app already holds, so no new prompt is needed — posting a

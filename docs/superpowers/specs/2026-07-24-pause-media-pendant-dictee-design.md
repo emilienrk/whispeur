@@ -1,7 +1,12 @@
 # Design : pause/reprise automatique de la musique pendant la dictée
 
 **Date :** 2026-07-24
-**Statut :** validé
+**Statut :** remplacé par `2026-07-29-pause-media-par-processus-design.md`
+
+> La sonde par périphérique décrite ici ne peut pas dire *quelle* application
+> produit du son, ce qui faisait démarrer un lecteur en pause pendant un appel.
+> Le document reste pour l'historique ; le comportement décrit n'est plus celui
+> du code.
 
 ## Objectif
 
