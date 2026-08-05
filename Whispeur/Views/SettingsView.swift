@@ -47,6 +47,11 @@ struct NativeSettingsView: View {
                     HistoryView(historyService: services.historyService)
                         .padding(20)
                 }
+            case .about:
+                ScrollView {
+                    AboutSection()
+                        .padding(20)
+                }
             }
         }
         // Force the window to stay at a consistent size across tabs
@@ -58,9 +63,9 @@ struct NativeSettingsView: View {
 // MARK: - Tab enum
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, model, language, engine, permissions, history
+    case general, model, language, engine, permissions, history, about
     var id: String { rawValue }
-    
+
     var title: String {
         switch self {
         case .general: return String(localized: "Général")
@@ -69,9 +74,10 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .engine: return String(localized: "Moteur")
         case .permissions: return String(localized: "Permissions")
         case .history: return String(localized: "Historique")
+        case .about: return String(localized: "À propos")
         }
     }
-    
+
     var systemImage: String {
         switch self {
         case .general: return "gearshape.fill"
@@ -80,6 +86,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .engine: return "cpu.fill"
         case .permissions: return "lock.shield.fill"
         case .history: return "clock.fill"
+        case .about: return "info.circle.fill"
         }
     }
 }

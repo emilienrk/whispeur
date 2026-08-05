@@ -64,6 +64,11 @@ final class SamplesAccumulator: Sendable {
             return result
         }
     }
+
+    /// Read-only sample count — never drains, so it is safe to poll while recording.
+    var count: Int {
+        mutex.withLock { $0.count }
+    }
 }
 
 /// Real-time audio capture service.
@@ -211,8 +216,7 @@ final class AudioCaptureService {
 
 extension AudioCaptureService {
     var recordedDuration: Double {
-        // Note: reads accumulator (not thread-safe for precision, but fine for display).
-        Double(accumulator.drainAll().count) / kWhisperAudioFormat.sampleRate
+        Double(accumulator.count) / kWhisperAudioFormat.sampleRate
     }
 }
 

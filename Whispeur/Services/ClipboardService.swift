@@ -29,6 +29,12 @@ final class ClipboardService {
     /// When `true`, the service will attempt to simulate Cmd+V after copying.
     var autoPasteEnabled: Bool = true
 
+    private let pasteboard: NSPasteboard
+
+    init(pasteboard: NSPasteboard = .general) {
+        self.pasteboard = pasteboard
+    }
+
     // MARK: - Public API
 
     /// Main entry point: copies `text` then pastes if `autoPasteEnabled`.
@@ -36,29 +42,67 @@ final class ClipboardService {
     /// - Returns: `.pasted` if the full paste succeeded, `.copiedOnly` otherwise.
     @discardableResult
     func copyAndPaste(_ text: String) async -> PasteResult {
+        // Pasting only borrows the pasteboard — whatever the user had copied is
+        // handed back once the target app has read the transcription.
+        let previousItems = snapshotPasteboard()
+
         // 1. Write to the pasteboard.
-        copyToClipboard(text)
+        let changeCount = copyToClipboard(text)
 
         // 2. Attempt auto-paste if requested.
         if autoPasteEnabled && AXIsProcessTrusted() {
             let success = await simulatePaste()
             if success {
+                // The target app reads the pasteboard on its own run loop; restoring
+                // too early makes it paste the previous content instead.
+                try? await Task.sleep(for: .milliseconds(300))
+                restorePasteboard(previousItems, ifUnchangedSince: changeCount)
                 return .pasted
             }
         }
 
-        // 3. Fallback: notify user.
+        // 3. Fallback: notify user. The text stays on the pasteboard — that is the
+        // whole point of the fallback, so nothing is restored here.
         if autoPasteEnabled {
             await sendCopiedNotification()
         }
         return .copiedOnly
     }
 
-    /// Writes text to the general pasteboard (does NOT paste).
-    func copyToClipboard(_ text: String) {
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(text, forType: .string)
+    /// Writes text to the pasteboard (does NOT paste).
+    ///
+    /// - Returns: the resulting `changeCount`, to detect later writes by other apps.
+    @discardableResult
+    func copyToClipboard(_ text: String) -> Int {
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        return pasteboard.changeCount
+    }
+
+    // MARK: - Pasteboard save & restore
+
+    /// Detached copy of the current contents — the originals are invalidated by
+    /// the next `clearContents()`, so every type has to be copied out eagerly.
+    func snapshotPasteboard() -> [NSPasteboardItem] {
+        guard let items = pasteboard.pasteboardItems else { return [] }
+        return items.compactMap { item in
+            let copy = NSPasteboardItem()
+            for type in item.types {
+                if let data = item.data(forType: type) {
+                    copy.setData(data, forType: type)
+                }
+            }
+            return copy.types.isEmpty ? nil : copy
+        }
+    }
+
+    /// Puts `items` back, unless another app wrote to the pasteboard meanwhile —
+    /// restoring then would silently destroy what the user just copied.
+    func restorePasteboard(_ items: [NSPasteboardItem], ifUnchangedSince changeCount: Int) {
+        guard pasteboard.changeCount == changeCount else { return }
+        pasteboard.clearContents()
+        guard !items.isEmpty else { return }
+        pasteboard.writeObjects(items)
     }
 
     // MARK: - Accessibility check
