@@ -211,31 +211,4 @@ actor WhisperService {
 
         return result.trimmingCharacters(in: .whitespaces)
     }
-
-    /// Resolves the bundled dev model URL.
-    static func devModelURL(filename: String = "ggml-base.bin") -> URL? {
-        if let bundleURL = Bundle.main.url(forResource: filename, withExtension: nil) {
-            return bundleURL
-        }
-
-        let executableURL = Bundle.main.executableURL
-        let projectModelsURL = executableURL?
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-
-        if let base = projectModelsURL {
-            let candidate = base.appendingPathComponent("Models/\(filename)")
-            if FileManager.default.fileExists(atPath: candidate.path(percentEncoded: false)) {
-                return candidate
-            }
-        }
-
-        let hardcodedDev = URL(fileURLWithPath: "/Users/emilien/dev/perso/whispeur/Models/\(filename)")
-        if FileManager.default.fileExists(atPath: hardcodedDev.path(percentEncoded: false)) {
-            return hardcodedDev
-        }
-
-        return nil
-    }
 }
