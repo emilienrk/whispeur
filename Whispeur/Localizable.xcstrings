@@ -891,6 +891,127 @@
           }
         }
       }
+    },
+    "À propos": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        }
+      }
+    },
+    "Confidentialité": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy"
+          }
+        }
+      }
+    },
+    "Votre voix est transcrite sur votre Mac. Aucun audio, aucune transcription et aucune donnée d'usage ne quittent l'appareil.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your voice is transcribed on your Mac. No audio, no transcript and no usage data ever leave the device."
+          }
+        }
+      }
+    },
+    "Whispeur n'établit que deux connexions sortantes :": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whispeur makes only two outgoing connections:"
+          }
+        }
+      }
+    },
+    "le téléchargement des modèles, depuis Hugging Face": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "downloading models, from Hugging Face"
+          }
+        }
+      }
+    },
+    "la vérification des mises à jour de l'application": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "checking for app updates"
+          }
+        }
+      }
+    },
+    "Logiciels tiers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Third-party software"
+          }
+        }
+      }
+    },
+    "Afficher les licences complètes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show full licenses"
+          }
+        }
+      }
+    },
+    "Vérifier les mises à jour…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for Updates…"
+          }
+        }
+      }
+    },
+    "Fermer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "Fichier de licences introuvable.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "License file not found."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
