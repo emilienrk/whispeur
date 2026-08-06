@@ -77,9 +77,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Observe pipeline state → update icon.
         observePipelineState()
 
-        // Microphone permission (non-blocking).
-        Task { @MainActor in
-            await sc.micPermManager.requestIfNeeded()
+        // The onboarding asks for the microphone itself, with an explanation
+        // shown first — prompting here would fire the system dialog cold.
+        if sc.settings.hasCompletedOnboarding {
+            Task { @MainActor in
+                await sc.micPermManager.requestIfNeeded()
+            }
+        } else {
+            OnboardingWindowController.shared.show(services: sc)
         }
 
         // Start global hotkey listener.

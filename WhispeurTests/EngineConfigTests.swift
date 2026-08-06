@@ -128,4 +128,19 @@ struct EngineConfigTests {
         #expect(params.initial_prompt == nil)
         #expect(params.carry_initial_prompt == false)
     }
+
+    @Test("hasCompletedOnboarding round-trips through UserDefaults")
+    func onboardingFlagPersists() {
+        let s = AppSettings.shared
+        let saved = s.hasCompletedOnboarding
+        defer { s.hasCompletedOnboarding = saved }
+
+        s.hasCompletedOnboarding = true
+        #expect(s.hasCompletedOnboarding == true)
+        #expect(UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") == true)
+
+        s.hasCompletedOnboarding = false
+        #expect(s.hasCompletedOnboarding == false)
+        #expect(UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") == false)
+    }
 }
