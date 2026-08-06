@@ -239,7 +239,11 @@ final class HotkeyManager {
         hasAccessibilityPermission = AXIsProcessTrusted()
         logger.debug("startListening() — AXIsProcessTrusted=\(self.hasAccessibilityPermission)")
         guard hasAccessibilityPermission else {
-            logger.warning("startListening() aborted — no accessibility permission")
+            // Granting Accessibility does not notify us, and the tap can only be
+            // installed once trusted — without this poll the hotkey stays dead
+            // until the next launch.
+            logger.warning("startListening() deferred — no accessibility permission, polling")
+            startPollingAccessibility()
             return
         }
         installEventTap()

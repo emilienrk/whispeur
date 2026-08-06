@@ -180,6 +180,21 @@ struct HotkeyManagerTests {
         #expect(counter.downs == 0, "la touche doit être capturée, pas déclenchée")
         #expect(box.value == HotKey(keyCode: 49, modifiers: 0))
     }
+
+    /// Sans Accessibilité, le tap ne peut pas s'installer : il doit repasser en
+    /// attente active, sinon le raccourci reste mort jusqu'au relancement.
+    @MainActor
+    @Test("startListening sans Accessibilité bascule sur le polling",
+          .enabled(if: !AXIsProcessTrusted()))
+    func startListeningDefersToPolling() {
+        let manager = HotkeyManager()
+        defer { manager.stopPollingAccessibility() }
+
+        manager.startListening()
+
+        #expect(manager.isListening == false)
+        #expect(manager.accessibilityPollTask != nil)
+    }
 }
 
 // MARK: - Helpers
