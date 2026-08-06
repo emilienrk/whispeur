@@ -153,6 +153,19 @@ struct OnboardingView: View {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(Color.white.opacity(0.05))
                     )
+
+                Text("La dictée d'Apple utilise la même touche et joue ses propres bips. Désactivez-la pour laisser la touche à Whispeur.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 360)
+
+                Button("Ouvrir les réglages de dictée") {
+                    openDictationSettings()
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.white.opacity(0.6))
             }
         }
     }
@@ -289,6 +302,15 @@ struct OnboardingView: View {
     private func select(_ model: WhisperModelDescriptor) {
         services.settings.selectedModelFilename = model.filename
         services.coordinator.modelURL = model.localURL
+    }
+
+    /// Apple's dictation is bound to the same 🎤 key and answers it with its own
+    /// start/stop chimes — nothing Whispeur can silence from its side.
+    private func openDictationSettings() {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension"
+        ) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func openAccessibilitySettings() {

@@ -661,17 +661,6 @@
         }
       }
     },
-    "Son de confirmation": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Confirmation Sound"
-          }
-        }
-      }
-    },
     "Stratégie de décodage": {
       "extractionState": "manual",
       "localizations": {
@@ -877,17 +866,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "At 0, transcription is reproducible. Higher = more variety, but also more errors."
-          }
-        }
-      }
-    },
-    "Émet un son bref quand la transcription est prête.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plays a short sound when transcription is ready."
           }
         }
       }
@@ -1273,6 +1251,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "Finish"
+          }
+        }
+      }
+    },
+    "Sons de dictée": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictation sounds"
+          }
+        }
+      }
+    },
+    "Émet un son bref au démarrage de l'enregistrement et quand la transcription est prête.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plays a short sound when recording starts and when the transcription is ready."
+          }
+        }
+      }
+    },
+    "La dictée d'Apple utilise la même touche et joue ses propres bips. Désactivez-la pour laisser la touche à Whispeur.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple dictation uses the same key and plays its own chimes. Turn it off to leave the key to Whispeur."
+          }
+        }
+      }
+    },
+    "Ouvrir les réglages de dictée": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open dictation settings"
           }
         }
       }
