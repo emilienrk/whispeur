@@ -70,6 +70,23 @@ struct MediaPlaybackControllerTests {
         #expect(classify(AudioProcess(pid: 1, bundleID: nil, isCapturingInput: false)) == .player)
     }
 
+    // MARK: - Ignored sources
+
+    @Test("The system sound daemon is never a player: our own cues play under its PID")
+    func systemSoundDaemonIsIgnored() {
+        // AudioServicesPlayAlertSound renders the dictation cues out of process,
+        // so they surface as a process that started mid-dictation and made the
+        // controller undo the pause it had just made correctly.
+        #expect(isIgnoredSource(bundleID: "systemsoundserverd", ownBundleID: "com.whispeur.app"))
+    }
+
+    @Test("A second Whispeur instance is ignored, a real player is not")
+    func ownBundleIsIgnoredButPlayersAreNot() {
+        #expect(isIgnoredSource(bundleID: "com.whispeur.app", ownBundleID: "com.whispeur.app"))
+        #expect(!isIgnoredSource(bundleID: "com.spotify.client", ownBundleID: "com.whispeur.app"))
+        #expect(!isIgnoredSource(bundleID: nil, ownBundleID: "com.whispeur.app"))
+    }
+
     // MARK: - Pause decision
 
     @Test("Nothing playing: no media key is ever sent")

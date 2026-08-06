@@ -52,6 +52,30 @@ func classify(_ process: AudioProcess) -> AudioSourceKind {
     return communicationBundleIDs.contains(bundleID) ? .communication : .player
 }
 
+/// The daemon macOS renders alert sounds through — Whispeur's own dictation
+/// cues included, since `AudioServicesPlayAlertSound` plays them out of
+/// process, under a PID no ownership check can recognise as ours.
+///
+/// Reported by CoreAudio as the process name rather than a reverse-DNS bundle
+/// identifier; read off the running system.
+private let systemSoundDaemonBundleID = "systemsoundserverd"
+
+/// Whether a process seen on the output must be skipped instead of counted as
+/// a player.
+///
+/// Letting the sound daemon through is what broke the feature: the cue starts
+/// right after the media key is sent, so the verification saw a process that
+/// was silent before and playing after, read it as "the key woke a paused
+/// player", and undid a pause that was correct.
+func isIgnoredSource(bundleID: String?, ownBundleID: String?) -> Bool {
+    if bundleID == systemSoundDaemonBundleID { return true }
+    // A second copy of Whispeur — a build running next to the installed app —
+    // plays the same sounds, and a PID check cannot see it. Taking it for a
+    // player sends Play/Pause into a silent system, which *starts* music
+    // rather than stopping it.
+    return bundleID != nil && bundleID == ownBundleID
+}
+
 private let communicationBundleIDs: Set<String> = [
     // Verified against the bundles installed on the build machine.
     "com.apple.FaceTime",
@@ -94,11 +118,7 @@ struct CoreAudioProcessProbe: AudioProcessProbe {
             else { return nil }
 
             let bundleID = readString(object, kAudioProcessPropertyBundleID)
-            // A second copy of Whispeur — a build running next to the installed
-            // app — plays the same sounds, and a PID check cannot see it. Taking
-            // it for a player sends Play/Pause into a silent system, which
-            // *starts* music rather than stopping it.
-            guard bundleID == nil || bundleID != ownBundleID else { return nil }
+            guard !isIgnoredSource(bundleID: bundleID, ownBundleID: ownBundleID) else { return nil }
 
             return AudioProcess(
                 pid: pid,
