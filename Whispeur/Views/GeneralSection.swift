@@ -76,8 +76,8 @@ struct GeneralSection: View {
 
                     SettingsToggleRow(
                         icon: "speaker.wave.2.fill",
-                        label: "Son de confirmation",
-                        description: "Émet un son bref quand la transcription est prête.",
+                        label: "Sons de dictée",
+                        description: "Émet un son bref au démarrage de l'enregistrement et quand la transcription est prête.",
                         isOn: $settings.confirmationSoundEnabled
                     )
 

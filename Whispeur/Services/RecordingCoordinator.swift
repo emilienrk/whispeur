@@ -145,6 +145,8 @@ final class RecordingCoordinator {
             return
         }
 
+        FeedbackSound.started.play()
+
         // --- Load model concurrently while the user speaks ---
         pipelineState = .loadingModel
         do {
@@ -207,9 +209,7 @@ final class RecordingCoordinator {
         pipelineState = .pasting
         lastTranscription = text
 
-        if AppSettings.shared.confirmationSoundEnabled {
-            NSSound.beep()
-        }
+        FeedbackSound.finished.play()
 
         let result = await clipboardService.copyAndPaste(text)
         logger.info("Paste result: \(String(describing: result))")
@@ -248,5 +248,20 @@ final class RecordingCoordinator {
                 self.pipelineState = .idle
             }
         }
+    }
+}
+
+// MARK: - Audio feedback
+
+/// Short system sounds telling the user the mic opened and the text landed —
+/// dictation is eyes-free, the menu bar icon alone is not enough.
+private enum FeedbackSound: String {
+    case started = "Tink"
+    case finished = "Pop"
+
+    @MainActor
+    func play() {
+        guard AppSettings.shared.confirmationSoundEnabled else { return }
+        NSSound(named: rawValue)?.play()
     }
 }
