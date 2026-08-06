@@ -21,12 +21,7 @@ build: setup
 	xcodebuild -scheme Whispeur -configuration Release build -derivedDataPath "$(PWD)/build/DerivedData"
 
 dmg: build
-	mkdir -p /tmp/whispeur-dmg-src && rm -rf /tmp/whispeur-dmg-src/*
-	cp -r build/DerivedData/Build/Products/Release/Whispeur.app /tmp/whispeur-dmg-src/
-	ln -s /Applications /tmp/whispeur-dmg-src/Applications
-	rm -f Whispeur.dmg
-	hdiutil create -volname "Whispeur" -srcfolder /tmp/whispeur-dmg-src -ov -format UDZO Whispeur.dmg
-	rm -rf /tmp/whispeur-dmg-src
+	./scripts/make-dmg.sh
 
 clean:
 	rm -rf build
