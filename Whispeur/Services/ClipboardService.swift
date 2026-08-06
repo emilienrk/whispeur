@@ -18,6 +18,48 @@ enum PasteResult {
     case copiedOnly
 }
 
+// MARK: - Focus State
+
+/// What the Accessibility API can say about the focused element.
+enum FocusState {
+    case editable
+    case notEditable
+    /// Nothing usable exposed — deliberately distinct from `notEditable`, since
+    /// Electron apps and web views routinely report an unhelpful element for a
+    /// perfectly good text field.
+    case unknown
+}
+
+/// Reads the system-wide focused element. Only an element that is present *and*
+/// clearly not editable answers `notEditable`; anything unreadable is `unknown`,
+/// so an app the API cannot describe still gets its paste.
+@MainActor
+func systemFocusState() -> FocusState {
+    let system = AXUIElementCreateSystemWide()
+    var focused: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(
+        system, kAXFocusedUIElementAttribute as CFString, &focused
+    ) == .success, let focused else { return .unknown }
+
+    guard CFGetTypeID(focused) == AXUIElementGetTypeID() else { return .unknown }
+    let element = unsafeBitCast(focused, to: AXUIElement.self)
+
+    var settable: DarwinBoolean = false
+    if AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable) == .success,
+       settable.boolValue {
+        return .editable
+    }
+
+    var role: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role) == .success,
+          let roleName = role as? String else { return .unknown }
+
+    let editableRoles: Set<String> = [
+        kAXTextFieldRole, kAXTextAreaRole, kAXComboBoxRole, "AXSearchField", "AXWebArea"
+    ]
+    return editableRoles.contains(roleName) ? .editable : .notEditable
+}
+
 // MARK: - ClipboardService
 
 /// Copies text to the general pasteboard and optionally auto-pastes it.
@@ -30,9 +72,17 @@ final class ClipboardService {
     var autoPasteEnabled: Bool = true
 
     private let pasteboard: NSPasteboard
+    private let focusState: @MainActor () -> FocusState
+    private let notifyCopied: @MainActor () async -> Void
 
-    init(pasteboard: NSPasteboard = .general) {
+    init(
+        pasteboard: NSPasteboard = .general,
+        focusState: @escaping @MainActor () -> FocusState = systemFocusState,
+        notifyCopied: @escaping @MainActor () async -> Void = sendCopiedNotification
+    ) {
         self.pasteboard = pasteboard
+        self.focusState = focusState
+        self.notifyCopied = notifyCopied
     }
 
     // MARK: - Public API
@@ -49,8 +99,10 @@ final class ClipboardService {
         // 1. Write to the pasteboard.
         let changeCount = copyToClipboard(text)
 
-        // 2. Attempt auto-paste if requested.
-        if autoPasteEnabled && AXIsProcessTrusted() {
+        // 2. Attempt auto-paste if requested. Pressing ⌘V with nothing editable
+        // focused makes macOS play its rejection beep, so skip it in that case —
+        // the text still reaches the clipboard through the fallback below.
+        if autoPasteEnabled && AXIsProcessTrusted() && focusState() != .notEditable {
             let success = await simulatePaste()
             if success {
                 // The target app reads the pasteboard on its own run loop; restoring
@@ -64,7 +116,7 @@ final class ClipboardService {
         // 3. Fallback: notify user. The text stays on the pasteboard — that is the
         // whole point of the fallback, so nothing is restored here.
         if autoPasteEnabled {
-            await sendCopiedNotification()
+            await notifyCopied()
         }
         return .copiedOnly
     }
@@ -152,29 +204,33 @@ final class ClipboardService {
             }
         }
     }
+}
 
-    /// Sends a local notification informing the user the text is in the clipboard.
-    private func sendCopiedNotification() async {
-        let center = UNUserNotificationCenter.current()
+// MARK: - Copied notification
 
-        // Request notification authorization if not yet determined.
-        let settings = await center.notificationSettings()
-        if settings.authorizationStatus == .notDetermined {
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
-        }
-        guard settings.authorizationStatus == .authorized ||
-              settings.authorizationStatus == .notDetermined else { return }
+/// Tells the user the text is waiting on the clipboard. A free function so tests
+/// can swap it out: UNUserNotificationCenter traps outside a real app bundle.
+@MainActor
+func sendCopiedNotification() async {
+    let center = UNUserNotificationCenter.current()
 
-        let content = UNMutableNotificationContent()
-        content.title = "Texte copié dans le presse-papier"
-        content.body  = "Aucun champ de texte actif détecté. Collez avec ⌘V."
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: "com.whispeur.copied-\(UUID().uuidString)",
-            content: content,
-            trigger: nil // deliver immediately
-        )
-        try? await center.add(request)
+    // Request notification authorization if not yet determined.
+    let settings = await center.notificationSettings()
+    if settings.authorizationStatus == .notDetermined {
+        _ = try? await center.requestAuthorization(options: [.alert, .sound])
     }
+    guard settings.authorizationStatus == .authorized ||
+          settings.authorizationStatus == .notDetermined else { return }
+
+    let content = UNMutableNotificationContent()
+    content.title = String(localized: "Texte copié dans le presse-papier")
+    content.body  = String(localized: "Aucun champ de texte actif détecté. Collez avec ⌘V.")
+    content.sound = .default
+
+    let request = UNNotificationRequest(
+        identifier: "com.whispeur.copied-\(UUID().uuidString)",
+        content: content,
+        trigger: nil // deliver immediately
+    )
+    try? await center.add(request)
 }

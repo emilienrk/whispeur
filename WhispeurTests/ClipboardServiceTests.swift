@@ -74,4 +74,20 @@ struct ClipboardServiceTests {
 
         #expect(pb.string(forType: .string) == nil)
     }
+
+    /// ⌘V with nothing editable focused only earns the macOS rejection beep.
+    @Test("Nothing editable focused: the text is copied, never pasted")
+    func notEditableFocusSkipsPaste() async {
+        let pb = NSPasteboard(name: NSPasteboard.Name("com.whispeur.tests.\(UUID().uuidString)"))
+        let service = ClipboardService(
+            pasteboard: pb,
+            focusState: { .notEditable },
+            notifyCopied: {}
+        )
+
+        let result = await service.copyAndPaste("the transcription")
+
+        #expect(result == .copiedOnly)
+        #expect(pb.string(forType: .string) == "the transcription")
+    }
 }

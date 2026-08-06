@@ -264,6 +264,10 @@ private enum FeedbackSound: String {
     @MainActor
     func play() {
         guard AppSettings.shared.confirmationSoundEnabled else { return }
-        NSSound(named: rawValue)?.play()
+        guard let sound = NSSound(named: rawValue) else { return }
+        // System sounds are mastered for alerts; at full volume they overpower a
+        // cue that fires on every single dictation.
+        sound.volume = 0.35
+        sound.play()
     }
 }

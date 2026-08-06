@@ -1661,6 +1661,28 @@
           }
         }
       }
+    },
+    "Texte copié dans le presse-papier": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text copied to the clipboard"
+          }
+        }
+      }
+    },
+    "Aucun champ de texte actif détecté. Collez avec ⌘V.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No active text field detected. Paste with ⌘V."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
