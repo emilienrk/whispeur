@@ -10,6 +10,7 @@
 
 import Foundation
 import AppKit
+import AudioToolbox
 import os
 
 // MARK: - Pipeline State
@@ -264,18 +265,27 @@ private enum FeedbackSound: String {
     @MainActor
     func play() {
         guard AppSettings.shared.confirmationSoundEnabled else { return }
-        guard let sound = NSSound(named: rawValue) else { return }
-        sound.volume = Self.alertVolume
-        sound.play()
+        guard let id = Self.soundID(for: self) else { return }
+        // The system applies System Settings › Sound › Alert volume here, so the
+        // cue always matches what the user set. NSSound would ignore that slider
+        // and play at full output volume.
+        AudioServicesPlayAlertSound(id)
     }
 
-    /// Follows System Settings › Sound › Alert volume, the slider users already
-    /// reach for. NSSound otherwise plays at full output volume, which is far
-    /// too loud for a cue that fires on every dictation.
-    private static var alertVolume: Float {
-        guard let level = UserDefaults.standard.object(
-            forKey: "com.apple.sound.beep.volume"
-        ) as? Double else { return 0.35 }
-        return Float(min(1, max(0, level)))
+    @MainActor
+    private static var soundIDs: [String: SystemSoundID] = [:]
+
+    @MainActor
+    private static func soundID(for sound: FeedbackSound) -> SystemSoundID? {
+        if let cached = soundIDs[sound.rawValue] { return cached }
+
+        let url = URL(fileURLWithPath: "/System/Library/Sounds/\(sound.rawValue).aiff")
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return nil }
+
+        var id: SystemSoundID = 0
+        guard AudioServicesCreateSystemSoundID(url as CFURL, &id) == kAudioServicesNoError else { return nil }
+
+        soundIDs[sound.rawValue] = id
+        return id
     }
 }
