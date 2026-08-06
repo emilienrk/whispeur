@@ -45,6 +45,7 @@ final class AppSettings {
         _modelUnloadDelay      = (ud.object(forKey: "modelUnloadDelay") as? Double) ?? 0.0
         _initialPrompt         = ud.string(forKey: "initialPrompt") ?? ""
         _vadEnabled            = (ud.object(forKey: "vadEnabled") as? Bool) ?? false
+        _hasCompletedOnboarding = (ud.object(forKey: "hasCompletedOnboarding") as? Bool) ?? false
         if let data = ud.data(forKey: "favoritedModels"),
            let arr  = try? JSONDecoder().decode([String].self, from: data) {
             favoritedModelFilenames = arr
@@ -147,6 +148,15 @@ final class AppSettings {
     var pauseMediaWhileRecording: Bool {
         get { _pauseMediaWhileRecording }
         set { _pauseMediaWhileRecording = newValue }
+    }
+
+    private var _hasCompletedOnboarding: Bool {
+        didSet { UserDefaults.standard.set(_hasCompletedOnboarding, forKey: "hasCompletedOnboarding") }
+    }
+    /// False until the first-launch setup has been walked through or dismissed.
+    var hasCompletedOnboarding: Bool {
+        get { _hasCompletedOnboarding }
+        set { _hasCompletedOnboarding = newValue }
     }
 
     // MARK: - Engine (Whisper params)
