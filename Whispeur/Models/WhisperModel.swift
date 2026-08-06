@@ -144,6 +144,17 @@ struct WhisperModelDescriptor: Identifiable, Hashable, Sendable {
         catalog.first { $0.name == "base" }!
     }
 
+    /// Best quality-per-second of the catalog: turbo is only weaker at
+    /// translation, which Whispeur never does (`params.translate = false`).
+    static var onboardingDefault: WhisperModelDescriptor {
+        catalog.first { $0.name == "large-v3-turbo-q5_0" }!
+    }
+
+    /// Offered as a way out on slow connections.
+    static var onboardingLight: WhisperModelDescriptor {
+        catalog.first { $0.name == "base-q5_1" }!
+    }
+
     /// Modèle Silero VAD requis par le filtre VAD de whisper.cpp.
     /// Hors catalogue : téléchargé automatiquement quand le VAD est activé.
     static let vadSilero = WhisperModelDescriptor(

@@ -8,6 +8,7 @@
 // without permissions, downloads or a window.
 
 import Foundation
+import ApplicationServices
 
 // MARK: - Steps
 
@@ -88,4 +89,20 @@ final class OnboardingFlow {
         case .welcome, .hotkey, .done: return false
         }
     }
+}
+
+// MARK: - Real requirements
+
+@MainActor
+struct SystemOnboardingRequirements: OnboardingRequirements {
+    let micManager: MicrophonePermissionManager
+    let settings: AppSettings
+
+    var isMicrophoneGranted: Bool { micManager.canRecord }
+
+    var isAccessibilityGranted: Bool { AXIsProcessTrusted() }
+
+    /// The selected model specifically — having *some* model on disk is not
+    /// enough, the pipeline loads the selected one.
+    var hasUsableModel: Bool { settings.selectedModelDescriptor?.isDownloaded ?? false }
 }
