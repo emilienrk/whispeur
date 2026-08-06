@@ -160,8 +160,9 @@ struct GeneralSection: View {
 
 struct SettingsToggleRow: View {
     let icon: String
-    let label: String
-    let description: String
+    // LocalizedStringKey, not String: Text(String) skips the string catalog.
+    let label: LocalizedStringKey
+    let description: LocalizedStringKey
     @Binding var isOn: Bool
 
     var body: some View {

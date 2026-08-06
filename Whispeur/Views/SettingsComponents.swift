@@ -29,7 +29,8 @@ struct SettingsCard<Content: View>: View {
 
 struct SectionHeader: View {
     let icon: String
-    let title: String
+    // LocalizedStringKey, not String: Text(String) skips the string catalog.
+    let title: LocalizedStringKey
 
     var body: some View {
         HStack(spacing: 7) {

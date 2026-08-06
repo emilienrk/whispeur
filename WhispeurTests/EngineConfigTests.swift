@@ -110,7 +110,7 @@ struct EngineConfigTests {
             #expect(preset.text.count <= PromptPreset.approximateCharacterBudget)
         }
 
-        let titles = Set(PromptPreset.all.map(\.title))
+        let titles = Set(PromptPreset.all.map(\.id))
         #expect(titles.count == PromptPreset.all.count)
     }
 

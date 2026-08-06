@@ -106,8 +106,8 @@ struct EngineSection: View {
                                 Button {
                                     append(preset)
                                 } label: {
-                                    Text(verbatim: preset.title)
-                                    Text(verbatim: preset.subtitle)
+                                    Text(preset.title)
+                                    Text(preset.subtitle)
                                 }
                             }
                             if !settings.initialPrompt.isEmpty {
@@ -269,8 +269,9 @@ struct EngineSection: View {
 // MARK: - Decoding mode row
 
 private struct DecodingModeRow: View {
-    let title: String
-    let description: String
+    // LocalizedStringKey, not String: Text(String) skips the string catalog.
+    let title: LocalizedStringKey
+    let description: LocalizedStringKey
     let icon: String
     let isSelected: Bool
     let action: () -> Void
@@ -375,12 +376,13 @@ private struct VADToggleRow: View {
 
 private struct EngineSliderRow: View {
     let icon: String
-    let label: String
+    // LocalizedStringKey, not String: Text(String) skips the string catalog.
+    let label: LocalizedStringKey
     @Binding var value: Double
     let range: ClosedRange<Double>
-    let lowLabel: String
-    let highLabel: String
-    let description: String
+    let lowLabel: LocalizedStringKey
+    let highLabel: LocalizedStringKey
+    let description: LocalizedStringKey
     var step: Double? = nil
     let format: (Double) -> String
 

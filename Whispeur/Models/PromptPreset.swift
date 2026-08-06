@@ -10,9 +10,11 @@
 import Foundation
 
 struct PromptPreset: Identifiable, Equatable {
-    var id: String { title }
-    let title: String
-    let subtitle: String
+    /// Stable across languages — the title is translated, so it cannot be the id.
+    let id: String
+    let title: LocalizedStringResource
+    let subtitle: LocalizedStringResource
+    /// Stays French: it is fed to Whisper as sample text, not shown as a label.
     let text: String
 
     /// whisper.cpp keeps at most whisper_n_text_ctx/2 tokens (224) and drops the rest
@@ -22,26 +24,31 @@ struct PromptPreset: Identifiable, Equatable {
 
     static let all: [PromptPreset] = [
         PromptPreset(
+            id: "dev",
             title: "Dev & outils",
             subtitle: "Noms de projets, CLI, jargon technique",
             text: "Whispeur, xcodegen, Sparkle, whisper.cpp, ggml, nix-darwin, OrbStack, pnpm, Swift, SwiftUI, Xcode, GitHub, pull request, commit, rebase, refactor, endpoint, build, runtime."
         ),
         PromptPreset(
+            id: "punctuation",
             title: "Ponctuation soignée",
             subtitle: "Phrases complètes, virgules, majuscules",
             text: "Voici comment je veux que le texte sorte : des phrases complètes, avec des majuscules en début de phrase, des virgules là où il faut respirer, et un point à la fin. Les questions se terminent par un point d'interrogation."
         ),
         PromptPreset(
+            id: "lowercase",
             title: "Minuscules, sans ponctuation",
             subtitle: "Style messagerie ou message de commit",
             text: "voilà comment je veux que ça sorte tout en minuscules sans ponctuation ni majuscules juste le texte au fil de la parole comme dans un message rapide"
         ),
         PromptPreset(
+            id: "formal",
             title: "Français soutenu",
             subtitle: "Registre écrit, pour mails et courriers",
             text: "Je vous remercie de votre retour. Vous trouverez ci-joint le document demandé ; je reste à votre disposition pour tout complément d'information. Bien cordialement."
         ),
         PromptPreset(
+            id: "franglais",
             title: "Franglais tech",
             subtitle: "Ancre les termes anglais dans du français",
             text: "J'ai ouvert une pull request sur le repo, le build passe mais il reste deux tests flaky. On merge après review, puis je déploie en staging et je check les logs."

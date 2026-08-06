@@ -1298,6 +1298,369 @@
           }
         }
       }
+    },
+    "Touche active": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Active key"
+          }
+        }
+      }
+    },
+    "Appuyez sur une touche…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press a key…"
+          }
+        }
+      }
+    },
+    "Fonctionne même quand Whispeur est en arrière-plan. La touche choisie est interceptée avant macOS : binder la touche Dictée remplace la dictée Apple.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Works even when Whispeur is in the background. The chosen key is intercepted before macOS: binding the Dictation key replaces Apple dictation."
+          }
+        }
+      }
+    },
+    "Mises à jour": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates"
+          }
+        }
+      }
+    },
+    "Vérifier…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check…"
+          }
+        }
+      }
+    },
+    "Les mises à jour incluent le moteur whisper.cpp intégré.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates include the bundled whisper.cpp engine."
+          }
+        }
+      }
+    },
+    "Interface": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interface"
+          }
+        }
+      }
+    },
+    "Langue de l'application": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App language"
+          }
+        }
+      }
+    },
+    "Le changement de langue nécessite le redémarrage de l'application.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changing the language requires restarting the app."
+          }
+        }
+      }
+    },
+    "Aucune transcription récente.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No recent transcription."
+          }
+        }
+      }
+    },
+    "Détection de voix (VAD)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice activity detection (VAD)"
+          }
+        }
+      }
+    },
+    "Filtre VAD (Silero)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VAD filter (Silero)"
+          }
+        }
+      }
+    },
+    "Ignore les passages sans parole avant la transcription. Réduit les hallucinations sur les silences.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skips non-speech stretches before transcribing. Reduces hallucinations on silence."
+          }
+        }
+      }
+    },
+    "Modèle VAD manquant — désactivez puis réactivez pour relancer le téléchargement.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VAD model missing — turn it off and back on to restart the download."
+          }
+        }
+      }
+    },
+    "Moteur whisper.cpp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "whisper.cpp engine"
+          }
+        }
+      }
+    },
+    "Le moteur est intégré à l'app : il se met à jour avec les mises à jour de Whispeur.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine is bundled with the app: it ships with Whispeur updates."
+          }
+        }
+      }
+    },
+    "Vocabulaire & style": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vocabulary & style"
+          }
+        }
+      }
+    },
+    "Vider le champ": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear the field"
+          }
+        }
+      }
+    },
+    "Whisper n'obéit pas à des consignes : il imite ce qu'il lit ici. Écris donc des exemples, pas des ordres — les noms propres et le jargon à reconnaître, et une phrase ponctuée comme tu veux la sortie. Vide = désactivé.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whisper does not follow instructions: it imitates what it reads here. So write examples, not orders — the names and jargon to recognise, and one sentence punctuated the way you want the output. Empty = off."
+          }
+        }
+      }
+    },
+    "Stockés dans ~/Library/Application Support/Whispeur/Models/": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stored in ~/Library/Application Support/Whispeur/Models/"
+          }
+        }
+      }
+    },
+    "Whispeur a besoin du microphone pour capturer votre voix et la transcrire localement.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whispeur needs the microphone to capture your voice and transcribe it locally."
+          }
+        }
+      }
+    },
+    "Dev & outils": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dev & tools"
+          }
+        }
+      }
+    },
+    "Noms de projets, CLI, jargon technique": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project names, CLI, technical jargon"
+          }
+        }
+      }
+    },
+    "Ponctuation soignée": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Careful punctuation"
+          }
+        }
+      }
+    },
+    "Phrases complètes, virgules, majuscules": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full sentences, commas, capitals"
+          }
+        }
+      }
+    },
+    "Minuscules, sans ponctuation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lowercase, no punctuation"
+          }
+        }
+      }
+    },
+    "Style messagerie ou message de commit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat or commit-message style"
+          }
+        }
+      }
+    },
+    "Français soutenu": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formal French"
+          }
+        }
+      }
+    },
+    "Registre écrit, pour mails et courriers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Written register, for emails and letters"
+          }
+        }
+      }
+    },
+    "Franglais tech": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tech franglais"
+          }
+        }
+      }
+    },
+    "Ancre les termes anglais dans du français": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anchors English terms inside French"
+          }
+        }
+      }
+    },
+    "Requise pour simuler Cmd+V et coller le texte transcrit dans l'application active.\nDans Réglages → Confidentialité & Sécurité → Accessibilité, activez Whispeur.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Required to simulate Cmd+V and paste the transcribed text into the active app.\nIn Settings → Privacy & Security → Accessibility, enable Whispeur."
+          }
+        }
+      }
+    },
+    "5 min": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "5 min"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
