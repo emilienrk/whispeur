@@ -83,6 +83,7 @@ private let communicationBundleIDs: Set<String> = [
 struct CoreAudioProcessProbe: AudioProcessProbe {
 
     private let ownPID = ProcessInfo.processInfo.processIdentifier
+    private let ownBundleID = Bundle.main.bundleIdentifier
 
     func outputtingProcesses() -> [AudioProcess] {
         processObjects().compactMap { object in
@@ -92,9 +93,16 @@ struct CoreAudioProcessProbe: AudioProcessProbe {
                   pid != ownPID
             else { return nil }
 
+            let bundleID = readString(object, kAudioProcessPropertyBundleID)
+            // A second copy of Whispeur — a build running next to the installed
+            // app — plays the same sounds, and a PID check cannot see it. Taking
+            // it for a player sends Play/Pause into a silent system, which
+            // *starts* music rather than stopping it.
+            guard bundleID == nil || bundleID != ownBundleID else { return nil }
+
             return AudioProcess(
                 pid: pid,
-                bundleID: readString(object, kAudioProcessPropertyBundleID),
+                bundleID: bundleID,
                 isCapturingInput: readUInt32(object, kAudioProcessPropertyIsRunningInput) == 1
             )
         }

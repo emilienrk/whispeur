@@ -137,6 +137,10 @@ final class RecordingCoordinator {
         // after cannot pollute the reading. Returns before the key is verified.
         mediaPlayback.pauseForRecording()
 
+        // Played before the tap opens, so the mic does not capture the chime
+        // and hand Whisper a sound to hallucinate a word out of.
+        FeedbackSound.started.play()
+
         // --- Start audio immediately ---
         do {
             try audioCapture.startRecording()
@@ -144,8 +148,6 @@ final class RecordingCoordinator {
             setError("Micro : \(error.localizedDescription)")
             return
         }
-
-        FeedbackSound.started.play()
 
         // --- Load model concurrently while the user speaks ---
         pipelineState = .loadingModel
