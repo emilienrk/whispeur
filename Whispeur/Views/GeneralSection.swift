@@ -9,6 +9,10 @@ struct GeneralSection: View {
     @Bindable var settings: AppSettings
     let hotkeyManager: HotkeyManager
 
+    /// Read once on appear rather than on every redraw: the Sounds directories
+    /// only change when the user drops a file in one.
+    @State private var availableSounds: [String] = []
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
 
@@ -80,6 +84,23 @@ struct GeneralSection: View {
                         description: "Émet un son bref au démarrage de l'enregistrement et quand la transcription est prête.",
                         isOn: $settings.confirmationSoundEnabled
                     )
+
+                    if settings.confirmationSoundEnabled {
+                        VStack(spacing: 6) {
+                            SoundPickerRow(
+                                label: "Au démarrage",
+                                selection: $settings.startSoundName,
+                                names: availableSounds
+                            )
+                            SoundPickerRow(
+                                label: "Transcription prête",
+                                selection: $settings.finishSoundName,
+                                names: availableSounds
+                            )
+                        }
+                        // Aligns under the toggle's label, past its icon column.
+                        .padding(.leading, 32)
+                    }
 
                     Divider().opacity(0.08)
 
@@ -153,6 +174,42 @@ struct GeneralSection: View {
                 }
             }
         }
+        .onAppear { availableSounds = SystemSoundLibrary.availableNames }
+    }
+}
+
+// MARK: - Sound picker row
+
+/// Picks one of the alert sounds macOS offers. Choosing one plays it, the way
+/// the system's own alert-sound list previews each entry as you click it.
+private struct SoundPickerRow: View {
+    let label: LocalizedStringKey
+    @Binding var selection: String
+    let names: [String]
+
+    /// A sound the user has since deleted would otherwise leave the menu blank,
+    /// hiding which one is actually configured.
+    private var options: [String] {
+        names.contains(selection) ? names : [selection] + names
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.55))
+
+            Spacer()
+
+            Picker("", selection: $selection) {
+                ForEach(options, id: \.self) { Text($0).tag($0) }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(width: 160)
+            .onChange(of: selection) { _, name in SystemSoundLibrary.play(named: name) }
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

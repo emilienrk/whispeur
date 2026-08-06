@@ -98,6 +98,7 @@ targets:
       - path: Whispeur/Services/HotkeyManager.swift
       - path: Whispeur/Services/MediaPlaybackController.swift
       - path: Whispeur/Services/AudioProcessProbe.swift
+      - path: Whispeur/Services/SystemSoundLibrary.swift
       - path: Whispeur/Bridge
     settings:
       base:

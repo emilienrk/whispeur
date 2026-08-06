@@ -10,7 +10,6 @@
 
 import Foundation
 import AppKit
-import AudioToolbox
 import os
 
 // MARK: - Pipeline State
@@ -258,34 +257,22 @@ final class RecordingCoordinator {
 
 /// Short system sounds telling the user the mic opened and the text landed —
 /// dictation is eyes-free, the menu bar icon alone is not enough.
-private enum FeedbackSound: String {
-    case started = "Tink"
-    case finished = "Pop"
+private enum FeedbackSound {
+    case started
+    case finished
 
     @MainActor
     func play() {
-        guard AppSettings.shared.confirmationSoundEnabled else { return }
-        guard let id = Self.soundID(for: self) else { return }
-        // The system applies System Settings › Sound › Alert volume here, so the
-        // cue always matches what the user set. NSSound would ignore that slider
-        // and play at full output volume.
-        AudioServicesPlayAlertSound(id)
+        let settings = AppSettings.shared
+        guard settings.confirmationSoundEnabled else { return }
+        SystemSoundLibrary.play(named: name(from: settings))
     }
 
     @MainActor
-    private static var soundIDs: [String: SystemSoundID] = [:]
-
-    @MainActor
-    private static func soundID(for sound: FeedbackSound) -> SystemSoundID? {
-        if let cached = soundIDs[sound.rawValue] { return cached }
-
-        let url = URL(fileURLWithPath: "/System/Library/Sounds/\(sound.rawValue).aiff")
-        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return nil }
-
-        var id: SystemSoundID = 0
-        guard AudioServicesCreateSystemSoundID(url as CFURL, &id) == kAudioServicesNoError else { return nil }
-
-        soundIDs[sound.rawValue] = id
-        return id
+    private func name(from settings: AppSettings) -> String {
+        switch self {
+        case .started:  settings.startSoundName
+        case .finished: settings.finishSoundName
+        }
     }
 }

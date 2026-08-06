@@ -35,6 +35,8 @@ final class AppSettings {
         _autoPasteEnabled      = (ud.object(forKey: "autoPaste") as? Bool) ?? true
         _launchAtLogin         = (ud.object(forKey: "launchAtLogin") as? Bool) ?? false
         _confirmationSound     = (ud.object(forKey: "confirmationSound") as? Bool) ?? false
+        _startSoundName        = ud.string(forKey: "startSoundName") ?? "Tink"
+        _finishSoundName       = ud.string(forKey: "finishSoundName") ?? "Pop"
         _pauseMediaWhileRecording = (ud.object(forKey: "pauseMediaWhileRecording") as? Bool) ?? true
         _useBeamSearch         = (ud.object(forKey: "useBeamSearch") as? Bool) ?? false
         _beamSize              = (ud.object(forKey: "beamSize") as? Int) ?? 5
@@ -139,6 +141,25 @@ final class AppSettings {
     var confirmationSoundEnabled: Bool {
         get { _confirmationSound }
         set { _confirmationSound = newValue }
+    }
+
+    private var _startSoundName: String {
+        didSet { UserDefaults.standard.set(_startSoundName, forKey: "startSoundName") }
+    }
+    /// Alert sound played when the microphone opens, by name — resolved against
+    /// the system Sounds directories, never stored as a path.
+    var startSoundName: String {
+        get { _startSoundName }
+        set { _startSoundName = newValue }
+    }
+
+    private var _finishSoundName: String {
+        didSet { UserDefaults.standard.set(_finishSoundName, forKey: "finishSoundName") }
+    }
+    /// Alert sound played when the transcription is ready.
+    var finishSoundName: String {
+        get { _finishSoundName }
+        set { _finishSoundName = newValue }
     }
 
     private var _pauseMediaWhileRecording: Bool {
