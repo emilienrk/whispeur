@@ -1012,6 +1012,270 @@
           }
         }
       }
+    },
+    "Configuration de Whispeur": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up Whispeur"
+          }
+        }
+      }
+    },
+    "Bienvenue dans Whispeur": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welcome to Whispeur"
+          }
+        }
+      }
+    },
+    "Dictez dans n'importe quelle application. Votre voix est transcrite sur votre Mac, sans jamais partir sur Internet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictate into any app. Your voice is transcribed on your Mac and never leaves it."
+          }
+        }
+      }
+    },
+    "Accès au microphone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone access"
+          }
+        }
+      }
+    },
+    "Whispeur a besoin du micro pour capturer votre voix. Sans cette autorisation, la dictée ne peut pas fonctionner.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whispeur needs the microphone to capture your voice. Without it, dictation cannot work."
+          }
+        }
+      }
+    },
+    "Autoriser le microphone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow microphone"
+          }
+        }
+      }
+    },
+    "Microphone autorisé": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone allowed"
+          }
+        }
+      }
+    },
+    "Ouvrir les Réglages Système": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open System Settings"
+          }
+        }
+      }
+    },
+    "Collage automatique": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic pasting"
+          }
+        }
+      }
+    },
+    "Avec l'autorisation d'Accessibilité, Whispeur colle le texte directement dans l'application active. Sans elle, le texte est copié dans le presse-papier — vous collez avec ⌘V.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With Accessibility access, Whispeur pastes text straight into the active app. Without it, text is copied to the clipboard — paste it with ⌘V."
+          }
+        }
+      }
+    },
+    "Accessibilité autorisée": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accessibility allowed"
+          }
+        }
+      }
+    },
+    "Vérifier à nouveau": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check again"
+          }
+        }
+      }
+    },
+    "Modèle de transcription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcription model"
+          }
+        }
+      }
+    },
+    "Le modèle tourne sur votre Mac. Le téléchargement n'a lieu qu'une fois.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model runs on your Mac. It is downloaded only once."
+          }
+        }
+      }
+    },
+    "recommandé": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "recommended"
+          }
+        }
+      }
+    },
+    "Utiliser": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use"
+          }
+        }
+      }
+    },
+    "Essayez": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try it"
+          }
+        }
+      }
+    },
+    "Maintenez la touche 🎤 de votre clavier, dites une phrase, puis relâchez. Le texte apparaît ci-dessous.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hold the 🎤 key on your keyboard, say a sentence, then release. The text appears below."
+          }
+        }
+      }
+    },
+    "En attente de votre première dictée…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for your first dictation…"
+          }
+        }
+      }
+    },
+    "Tout est prêt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You are all set"
+          }
+        }
+      }
+    },
+    "Whispeur vit dans la barre de menus. Retrouvez-y vos modèles, votre historique et vos réglages.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whispeur lives in the menu bar. Your models, history and settings are all there."
+          }
+        }
+      }
+    },
+    "Retour": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        }
+      }
+    },
+    "Continuer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue"
+          }
+        }
+      }
+    },
+    "Terminer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
