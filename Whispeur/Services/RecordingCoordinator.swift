@@ -265,9 +265,17 @@ private enum FeedbackSound: String {
     func play() {
         guard AppSettings.shared.confirmationSoundEnabled else { return }
         guard let sound = NSSound(named: rawValue) else { return }
-        // System sounds are mastered for alerts; at full volume they overpower a
-        // cue that fires on every single dictation.
-        sound.volume = 0.35
+        sound.volume = Self.alertVolume
         sound.play()
+    }
+
+    /// Follows System Settings › Sound › Alert volume, the slider users already
+    /// reach for. NSSound otherwise plays at full output volume, which is far
+    /// too loud for a cue that fires on every dictation.
+    private static var alertVolume: Float {
+        guard let level = UserDefaults.standard.object(
+            forKey: "com.apple.sound.beep.volume"
+        ) as? Double else { return 0.35 }
+        return Float(min(1, max(0, level)))
     }
 }
