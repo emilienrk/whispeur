@@ -24,9 +24,10 @@ final class StatusBarController: NSObject {
     private let micPermissionManager: MicrophonePermissionManager
     private let servicesContainer: ServicesContainer
 
-    private var spinTimer: Timer?
-    private var spinAngle: CGFloat = 0
-    private var baseSpinImage: NSImage?
+    /// Overlaid on the button while transcribing: NSStatusBarButton takes no
+    /// symbol effects, so the animation lives in a hosted SwiftUI view where
+    /// `.symbolEffect` is the API meant for it.
+    private var spinnerView: NSHostingView<TranscribingSpinner>?
 
     private var recordingTimer: Timer?
     private var recordingStartTime: Date?
@@ -101,10 +102,8 @@ final class StatusBarController: NSObject {
         menu.addItem(.separator())
 
         // ── Favorite models ───────────────────────────────────────────────
-        let favorites = settings.favoritedModelDescriptors.filter { $0.isDownloaded }
+        let favorites = settings.favoritedModelDescriptors.filter { ModelManager.shared.isInstalled($0) }
         if !favorites.isEmpty {
-            menu.addItem(.separator())
-
             let favHeader = NSMenuItem(title: String(localized: "Modèles favoris"), action: nil, keyEquivalent: "")
             favHeader.isEnabled = false
             favHeader.attributedTitle = NSAttributedString(
@@ -179,12 +178,8 @@ final class StatusBarController: NSObject {
             button.title = ""
         }
         
-        let isSpinningState = (state == .transcribing)
-        if !isSpinningState {
-            spinTimer?.invalidate()
-            spinTimer = nil
-        }
-        
+        if state != .transcribing { stopSpinner() }
+
         // Use pointSize and weight to exactly match the Apple Control Center mic icon
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
 
@@ -210,9 +205,9 @@ final class StatusBarController: NSObject {
             }
 
         case .transcribing:
-            button.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: "Transcription…")?.withSymbolConfiguration(config)
             button.contentTintColor = nil
-            if spinTimer == nil {
+            if spinnerView == nil {
+                button.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: "Transcription…")?.withSymbolConfiguration(config)
                 shouldSpin = true
             }
 
@@ -227,36 +222,35 @@ final class StatusBarController: NSObject {
         
         button.image?.isTemplate = (button.contentTintColor == nil)
         
-        if shouldSpin {
-            baseSpinImage = button.image
-            spinAngle = 0
-            let t = Timer(timeInterval: 0.04, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.tickSpin() }
-            }
-            RunLoop.current.add(t, forMode: .common)
-            spinTimer = t
-        }
+        if shouldSpin { startSpinner(on: button) }
     }
 
-    private func tickSpin() {
-        guard let button = statusItem.button, let base = baseSpinImage else { return }
-        spinAngle -= .pi / 15
-        if spinAngle <= -.pi * 2 { spinAngle += .pi * 2 }
-        
-        let size = base.size
-        let img = NSImage(size: size)
-        img.lockFocus()
-        if let ctx = NSGraphicsContext.current?.cgContext {
-            ctx.translateBy(x: size.width / 2, y: size.height / 2)
-            ctx.rotate(by: spinAngle)
-            ctx.translateBy(x: -size.width / 2, y: -size.height / 2)
-        }
-        base.draw(at: .zero, from: .zero, operation: .copy, fraction: 1.0)
-        img.unlockFocus()
-        img.isTemplate = base.isTemplate
-        button.image = img
+    private func startSpinner(on button: NSStatusBarButton) {
+        guard spinnerView == nil, let image = button.image else { return }
+
+        let view = NSHostingView(rootView: TranscribingSpinner())
+        view.translatesAutoresizingMaskIntoConstraints = false
+        button.addSubview(view)
+        NSLayoutConstraint.activate([
+            view.centerXAnchor.constraint(equalTo: button.centerXAnchor),
+            view.centerYAnchor.constraint(equalTo: button.centerYAnchor)
+        ])
+        spinnerView = view
+
+        // Swap the button's own image for a blank one of the same size: the
+        // status item keeps its width, and only the overlay is seen turning.
+        let placeholder = NSImage(size: image.size)
+        placeholder.isTemplate = true
+        button.image = placeholder
     }
-    
+
+    private func stopSpinner() {
+        // The effect is owned by the view — dropping it stops the animation.
+        spinnerView?.removeFromSuperview()
+        spinnerView = nil
+    }
+
+
     private func updateRecordingTimer() {
         guard let button = statusItem.button,
               let startTime = recordingStartTime else { return }
@@ -305,12 +299,26 @@ final class StatusBarController: NSObject {
     }
 }
 
+// MARK: - Transcription spinner
+
+/// Matches the point size and weight of the idle mic symbol, so the overlay
+/// lands exactly where the button's own image sat.
+struct TranscribingSpinner: View {
+    var body: some View {
+        Image(systemName: "arrow.triangle.2.circlepath")
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(Color(nsColor: .labelColor))
+            .symbolEffect(.rotate, options: .repeating)
+            .accessibilityLabel(Text("Transcription en cours…"))
+    }
+}
+
 // MARK: - NSMenuDelegate
 
 extension StatusBarController: NSMenuDelegate {
     /// Called by macOS just before the menu is displayed — rebuild contents fresh.
     func menuWillOpen(_ menu: NSMenu) {
-        logger.debug("menuWillOpen — rebuilding \(self.settings.favoritedModelDescriptors.filter(\.isDownloaded).count) favorites")
+        logger.debug("menuWillOpen — rebuilding \(self.settings.favoritedModelDescriptors.count) favorites")
         let fresh = buildMenu()
         menu.removeAllItems()
         // Move items from the temp menu into the persistent menu.
