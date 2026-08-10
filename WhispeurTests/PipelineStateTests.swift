@@ -2,6 +2,7 @@
 // WhispeurTests
 
 import Testing
+import Observation
 
 struct PipelineStateTests {
 
@@ -30,4 +31,29 @@ struct PipelineStateTests {
         #expect(PipelineState.error("msg") == .error("msg"))
         #expect(PipelineState.error("a") != .error("b"))
     }
+
+    /// The menu bar icon is driven by `Observations` over `pipelineState`, which
+    /// only works if the sequence hands over the current value before the
+    /// changes — otherwise the icon would stay blank until the first dictation.
+    @Test("Observations yields the current state, then each transition")
+    @MainActor
+    func observationsDeliverInitialValueThenChanges() async {
+        let holder = StateHolder()
+        var iterator = Observations({ holder.state }).makeAsyncIterator()
+
+        #expect(await iterator.next() == .idle)
+
+        holder.state = .recording
+        #expect(await iterator.next() == .recording)
+
+        holder.state = .transcribing
+        #expect(await iterator.next() == .transcribing)
+    }
+}
+
+/// Stands in for RecordingCoordinator: same shape, none of its services.
+@MainActor
+@Observable
+private final class StateHolder {
+    var state: PipelineState = .idle
 }

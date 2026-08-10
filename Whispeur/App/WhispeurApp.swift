@@ -56,6 +56,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let servicesContainer = ServicesContainer()
 
     private var statusBar: StatusBarController!
+    private var iconTask: Task<Void, Never>?
 
     // MARK: - Lifecycle
 
@@ -111,23 +112,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Observation loop
 
-    /// Reactive observation loop: watches every pipelineState transition.
+    /// Watches every pipelineState transition. `Observations` hands them over as
+    /// an async sequence — no tracking to re-arm by hand after each change.
     private func observePipelineState() {
-        Task { @MainActor [weak self] in
+        iconTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            self._observeNextChange()
-        }
-    }
-
-    private func _observeNextChange() {
-        withObservationTracking {
-            let state = servicesContainer.coordinator.pipelineState
-            statusBar.updateIcon(for: state)
-        } onChange: { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.statusBar.updateIcon(for: self.servicesContainer.coordinator.pipelineState)
-                self._observeNextChange()
+            let coordinator = self.servicesContainer.coordinator
+            for await state in Observations({ coordinator.pipelineState }) {
+                self.statusBar.updateIcon(for: state)
             }
         }
     }
