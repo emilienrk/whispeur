@@ -32,9 +32,16 @@ final class ModelManager: NSObject {
     /// Download state keyed by model filename.
     private(set) var downloadStates: [String: ModelDownloadState] = [:]
 
+    /// Filenames currently on disk. Observable, unlike `descriptor.isDownloaded`,
+    /// which stats the filesystem and therefore never invalidates a SwiftUI body.
+    private(set) var installedFilenames: Set<String> = []
+
     // MARK: - Private
 
     private var activeTasks: [String: URLSessionDownloadTask] = [:]
+    /// Last published percentage per download — URLSession reports every packet,
+    /// and one main-actor hop per packet floods the model list.
+    private let publishedPercent = OSAllocatedUnfairLock(initialState: [String: Int]())
     private var _session: URLSession?
     private var session: URLSession {
         if let s = _session { return s }
@@ -57,14 +64,37 @@ final class ModelManager: NSObject {
 
     // MARK: - Public API
 
+    private override init() {
+        super.init()
+        refreshInstalled()
+    }
+
+    /// Rescans the models directory. Called on init and whenever a view appears,
+    /// so a file added or removed in the Finder is picked up.
+    func refreshInstalled() {
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            atPath: Self.modelsDirectory.path(percentEncoded: false)
+        )) ?? []
+        installedFilenames = Set(contents)
+    }
+
+    func isInstalled(_ model: WhisperModelDescriptor) -> Bool {
+        installedFilenames.contains(model.filename)
+    }
+
     func state(for model: WhisperModelDescriptor) -> ModelDownloadState {
-        if model.isDownloaded { return .done }
-        return downloadStates[model.filename] ?? .idle
+        let tracked = downloadStates[model.filename] ?? .idle
+        switch tracked {
+        case .downloading, .installing, .failed:
+            return tracked
+        case .idle, .done:
+            return isInstalled(model) ? .done : .idle
+        }
     }
 
     /// Starts downloading a model. No-op if already downloaded or in progress.
     func download(_ model: WhisperModelDescriptor) {
-        guard !model.isDownloaded,
+        guard !isInstalled(model),
               activeTasks[model.filename] == nil else { return }
 
         // Ensure the destination directory exists.
@@ -89,15 +119,21 @@ final class ModelManager: NSObject {
         activeTasks[model.filename]?.cancel()
         activeTasks.removeValue(forKey: model.filename)
         downloadStates[model.filename] = .idle
+        clearPublishedPercent(model.filename)
         logger.info("Download cancelled: \(model.filename)")
     }
 
     /// Deletes a downloaded model file.
     func delete(_ model: WhisperModelDescriptor) {
-        guard model.isDownloaded else { return }
+        guard isInstalled(model) else { return }
         try? FileManager.default.removeItem(at: model.localURL)
+        installedFilenames.remove(model.filename)
         downloadStates[model.filename] = .idle
         logger.info("Model deleted: \(model.filename)")
+    }
+
+    private func clearPublishedPercent(_ filename: String) {
+        publishedPercent.withLock { $0[filename] = nil }
     }
 }
 
@@ -116,6 +152,14 @@ extension ModelManager: URLSessionDownloadDelegate {
               totalBytesExpectedToWrite > 0 else { return }
 
         let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        let percent = Int(progress * 100)
+
+        let isNewPercent = publishedPercent.withLock { published -> Bool in
+            guard published[filename] != percent else { return false }
+            published[filename] = percent
+            return true
+        }
+        guard isNewPercent else { return }
 
         Task { @MainActor [weak self] in
             self?.downloadStates[filename] = .downloading(progress: progress)
@@ -145,12 +189,15 @@ extension ModelManager: URLSessionDownloadDelegate {
             try FileManager.default.moveItem(at: location, to: destination)
 
             Task { @MainActor [weak self] in
+                self?.installedFilenames.insert(filename)
                 self?.downloadStates[filename] = .done
+                self?.clearPublishedPercent(filename)
                 self?.logger.info("Model installed: \(filename)")
             }
         } catch {
             Task { @MainActor [weak self] in
                 self?.downloadStates[filename] = .failed(error.localizedDescription)
+                self?.clearPublishedPercent(filename)
                 self?.logger.error("Install failed for \(filename): \(error)")
             }
         }
@@ -169,6 +216,7 @@ extension ModelManager: URLSessionDownloadDelegate {
         Task { @MainActor [weak self] in
             self?.downloadStates[filename] = .failed(message)
             self?.activeTasks.removeValue(forKey: filename)
+            self?.clearPublishedPercent(filename)
             self?.logger.error("Download failed for \(filename): \(message)")
         }
     }

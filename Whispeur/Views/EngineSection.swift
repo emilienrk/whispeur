@@ -335,7 +335,7 @@ private struct VADToggleRow: View {
                     get: { settings.vadEnabled },
                     set: { enabled in
                         settings.vadEnabled = enabled
-                        if enabled && !model.isDownloaded {
+                        if enabled && !ModelManager.shared.isInstalled(model) {
                             ModelManager.shared.download(model)
                         }
                     }
