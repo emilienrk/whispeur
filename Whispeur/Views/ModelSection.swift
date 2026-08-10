@@ -11,8 +11,9 @@ struct ModelSection: View {
     let coordinator: RecordingCoordinator
 
     @State private var manager = ModelManager.shared
+    @State private var expandedFamilies: Set<String> = []
 
-    private let catalog = WhisperModelDescriptor.catalog
+    private let families = WhisperModelDescriptor.families
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -37,43 +38,170 @@ struct ModelSection: View {
             }
             .padding(20)
 
-            // Model list
+            // Model list, folded by family
             ScrollView {
                 LazyVStack(spacing: 6) {
-                ForEach(catalog) { model in
-                    ModelRow(
-                        model: model,
-                        downloadState: manager.state(for: model),
-                        isSelected: settings.selectedModelFilename == model.filename,
-                        isFavorite: settings.isFavorite(filename: model.filename),
-                        canFavorite: settings.favoritedModelFilenames.count < AppSettings.maxFavorites
-                                  || settings.isFavorite(filename: model.filename),
-                        onSelect: {
-                            settings.selectedModelFilename = model.filename
-                            coordinator.modelURL = model.localURL
-                        },
-                        onToggleFavorite: {
-                            settings.toggleFavorite(filename: model.filename)
-                        },
-                        onDownload: { manager.download(model) },
-                        onCancel:   { manager.cancel(model) },
-                        onDelete:   {
-                            if settings.selectedModelFilename == model.filename {
-                                settings.selectedModelFilename = ""
-                                coordinator.modelURL = nil
-                            }
-                            // Also remove from favorites if deleted
-                            if settings.isFavorite(filename: model.filename) {
-                                settings.toggleFavorite(filename: model.filename)
-                            }
-                            manager.delete(model)
-                        }
-                    )
-                }
+                    ForEach(families) { family in
+                        FamilyGroup(
+                            family: family,
+                            isExpanded: expandedFamilies.contains(family.name),
+                            states: family.variants.map { manager.state(for: $0) },
+                            selectedFilename: settings.selectedModelFilename,
+                            onToggleExpanded: { toggleExpanded(family.name) },
+                            row: { variant in row(for: variant) }
+                        )
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
             }
+        }
+        .onAppear {
+            manager.refreshInstalled()
+            expandFamiliesInUse()
+        }
+    }
+
+    // MARK: - Row construction
+
+    private func row(for model: WhisperModelDescriptor) -> ModelRow {
+        ModelRow(
+            model: model,
+            downloadState: manager.state(for: model),
+            isSelected: settings.selectedModelFilename == model.filename,
+            isFavorite: settings.isFavorite(filename: model.filename),
+            canFavorite: settings.favoritedModelFilenames.count < AppSettings.maxFavorites
+                      || settings.isFavorite(filename: model.filename),
+            onSelect: {
+                settings.selectedModelFilename = model.filename
+                coordinator.modelURL = model.localURL
+            },
+            onToggleFavorite: {
+                settings.toggleFavorite(filename: model.filename)
+            },
+            onDownload: { manager.download(model) },
+            onCancel:   { manager.cancel(model) },
+            onDelete:   {
+                if settings.selectedModelFilename == model.filename {
+                    settings.selectedModelFilename = ""
+                    coordinator.modelURL = nil
+                }
+                // Also remove from favorites if deleted
+                if settings.isFavorite(filename: model.filename) {
+                    settings.toggleFavorite(filename: model.filename)
+                }
+                manager.delete(model)
+            }
+        )
+    }
+
+    // MARK: - Expansion
+
+    private func toggleExpanded(_ family: String) {
+        if expandedFamilies.contains(family) {
+            expandedFamilies.remove(family)
+        } else {
+            expandedFamilies.insert(family)
+        }
+    }
+
+    /// Opens the families the user already has something in, so what's installed
+    /// is visible without hunting through collapsed rows.
+    private func expandFamiliesInUse() {
+        expandedFamilies = Set(
+            families
+                .filter { $0.variants.contains { manager.isInstalled($0) } }
+                .map(\.name)
+        )
+    }
+}
+
+// MARK: - Family group
+
+private struct FamilyGroup<Row: View>: View {
+    let family: WhisperModelFamily
+    let isExpanded: Bool
+    let states: [ModelDownloadState]
+    let selectedFilename: String
+    let onToggleExpanded: () -> Void
+    @ViewBuilder let row: (WhisperModelDescriptor) -> Row
+
+    private var installedCount: Int {
+        states.filter { $0 == .done }.count
+    }
+
+    private var activeVariant: WhisperModelDescriptor? {
+        family.variants.first { $0.filename == selectedFilename }
+    }
+
+    private var isBusy: Bool {
+        states.contains {
+            if case .downloading = $0 { return true }
+            if case .installing = $0 { return true }
+            return false
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Button(action: onToggleExpanded) {
+                HStack(spacing: 10) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.35))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+
+                    Text(family.name)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(installedCount > 0 ? 1 : 0.7))
+
+                    Spacer()
+
+                    summary
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                VStack(spacing: 6) {
+                    ForEach(family.variants) { variant in
+                        row(variant)
+                    }
+                }
+                .padding(.leading, 20)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.03))
+        )
+        .animation(.easeInOut(duration: 0.18), value: isExpanded)
+    }
+
+    @ViewBuilder
+    private var summary: some View {
+        if let active = activeVariant {
+            HStack(spacing: 6) {
+                Text(active.quantization)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.35))
+                Text("Actif")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+            }
+        } else if isBusy {
+            ProgressView().scaleEffect(0.5).frame(width: 16, height: 16)
+        } else if installedCount > 0 {
+            Text(installedCount > 1 ? "\(installedCount) installés" : "1 installé")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.4))
+        } else {
+            Text(family.variants.count > 1 ? "\(family.variants.count) variantes" : "1 variante")
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.25))
         }
     }
 }
@@ -92,10 +220,9 @@ private struct ModelRow: View {
     let onCancel:        () -> Void
     let onDelete:        () -> Void
 
-    private var isDownloaded: Bool {
-        if case .done = downloadState { return true }
-        return model.isDownloaded && downloadState == .idle
-    }
+    /// `.done` is the single source of truth: ModelManager derives it from its
+    /// observable on-disk index, so the row reacts to install and delete alike.
+    private var isDownloaded: Bool { downloadState == .done }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -104,22 +231,20 @@ private struct ModelRow: View {
                 // Selection checkbox (only when downloaded)
                 selectionIndicator
 
-                // Name + size
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(model.name)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(isDownloaded ? .white : .white.opacity(0.45))
-                        if model.isEnglishOnly {
-                            Text("EN")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.5))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(Color.white.opacity(0.1)))
-                        }
+                // Precision + size — the family header already carries the name
+                HStack(spacing: 6) {
+                    Text(model.quantization)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(isDownloaded ? .white : .white.opacity(0.45))
+                    if model.isEnglishOnly {
+                        Text("EN")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.white.opacity(0.1)))
                     }
-                    Text(model.sizeInfo)
+                    Text(model.fileSize)
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.3))
                 }
@@ -196,25 +321,8 @@ private struct ModelRow: View {
     private var trailingAction: some View {
         switch downloadState {
         case .idle:
-            if model.isDownloaded {
-                // Downloaded but not active: show status + delete
-                HStack(spacing: 8) {
-                    Text(isSelected ? "Actif" : "Installé")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isSelected ? Color.accentColor : .white.opacity(0.4))
-                    if !isSelected {
-                        Button(role: .destructive, action: onDelete) {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Supprimer le modèle")
-                    }
-                }
-            } else {
-                // Not downloaded: download button
-                Button(action: onDownload) {
-                    Label(LocalizedStringKey("Télécharger"), systemImage: "arrow.down.circle")
-                }
+            Button(action: onDownload) {
+                Label(LocalizedStringKey("Télécharger"), systemImage: "arrow.down.circle")
             }
 
         case .downloading(let progress):
@@ -245,13 +353,11 @@ private struct ModelRow: View {
                 Text(isSelected ? "Actif" : "Installé")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(isSelected ? Color.accentColor : .white.opacity(0.4))
-                if !isSelected {
-                    Button(role: .destructive, action: onDelete) {
-                        Image(systemName: "trash")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Supprimer le modèle")
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
                 }
+                .buttonStyle(.borderless)
+                .help("Supprimer le modèle")
             }
 
         case .failed:

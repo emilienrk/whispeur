@@ -104,6 +104,27 @@ struct WhisperModelDescriptor: Identifiable, Hashable, Sendable {
         FileManager.default.fileExists(atPath: localURL.path(percentEncoded: false))
     }
 
+    /// `sizeInfo` reads "Q5_1 · 31 MiB": the precision, then the file size.
+    private var sizeInfoParts: (quantization: String, fileSize: String) {
+        let parts = sizeInfo.components(separatedBy: " · ")
+        guard parts.count == 2 else { return ("", sizeInfo) }
+        return (parts[0], parts[1])
+    }
+
+    var quantization: String { sizeInfoParts.quantization }
+    var fileSize: String { sizeInfoParts.fileSize }
+
+    /// Base model this descriptor is a variant of — quantization suffix and the
+    /// English-only marker stripped, so `tiny.en-q5_1` folds into `tiny`.
+    var familyName: String {
+        var base = name
+        if let quantSuffix = base.range(of: #"-q\d_\d$"#, options: .regularExpression) {
+            base.removeSubrange(quantSuffix)
+        }
+        if base.hasSuffix(".en") { base.removeLast(3) }
+        return base
+    }
+
     static let catalog: [WhisperModelDescriptor] = [
         .init(name: "tiny",           sizeInfo: "F16 · 75 MiB",    ggmlFile: "ggml-tiny.bin",               englishOnly: false),
         .init(name: "tiny-q5_1",      sizeInfo: "Q5_1 · 31 MiB",   ggmlFile: "ggml-tiny-q5_1.bin",          englishOnly: false),
@@ -164,6 +185,39 @@ struct WhisperModelDescriptor: Identifiable, Hashable, Sendable {
         filename: "ggml-silero-v5.1.2.bin",
         isEnglishOnly: false
     )
+}
+
+// MARK: - Model family
+
+/// A base model and its quantizations, so the settings list shows 8 rows
+/// instead of 33. Multilingual variants come before the English-only ones.
+struct WhisperModelFamily: Identifiable, Sendable {
+    let name: String
+    let variants: [WhisperModelDescriptor]
+
+    var id: String { name }
+}
+
+extension WhisperModelDescriptor {
+    /// Catalog folded into families, in catalog order.
+    static let families: [WhisperModelFamily] = {
+        var order: [String] = []
+        var grouped: [String: [WhisperModelDescriptor]] = [:]
+        for model in catalog {
+            let family = model.familyName
+            if grouped[family] == nil { order.append(family) }
+            grouped[family, default: []].append(model)
+        }
+        return order.map { family in
+            let variants = grouped[family] ?? []
+            // Swift's sort isn't stable, so partition rather than sort to keep
+            // the catalog's own ordering within each group.
+            return WhisperModelFamily(
+                name: family,
+                variants: variants.filter { !$0.isEnglishOnly } + variants.filter(\.isEnglishOnly)
+            )
+        }
+    }()
 }
 
 private let huggingFaceBase = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"
