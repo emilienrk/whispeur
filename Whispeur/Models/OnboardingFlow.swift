@@ -17,6 +17,8 @@ enum OnboardingStep: Int, CaseIterable, Comparable, Sendable {
     case microphone
     case accessibility
     case model
+    case engineOverview
+    case engine
     case hotkey
     case done
 
@@ -53,7 +55,7 @@ final class OnboardingFlow {
     /// refusing it must not trap the user on that page.
     var canAdvance: Bool {
         switch step {
-        case .welcome, .accessibility, .hotkey: return true
+        case .welcome, .accessibility, .engineOverview, .engine, .hotkey: return true
         case .microphone: return requirements.isMicrophoneGranted
         case .model:      return requirements.hasUsableModel
         case .done:       return false
@@ -81,12 +83,14 @@ final class OnboardingFlow {
         }
     }
 
+    /// Engine settings are never "satisfied": they teach rather than gate, so the
+    /// step is shown even to someone whose permissions and model are already there.
     private func isSatisfied(_ step: OnboardingStep) -> Bool {
         switch step {
         case .microphone:    return requirements.isMicrophoneGranted
         case .accessibility: return requirements.isAccessibilityGranted
         case .model:         return requirements.hasUsableModel
-        case .welcome, .hotkey, .done: return false
+        case .welcome, .engineOverview, .engine, .hotkey, .done: return false
         }
     }
 }

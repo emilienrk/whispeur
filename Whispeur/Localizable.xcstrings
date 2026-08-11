@@ -1,6 +1,50 @@
 {
   "sourceLanguage": "fr",
   "strings": {
+    "**Le décodage** — au plus probable, ou en explorant plusieurs pistes quand la précision prime.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "**The decoding** — go with the likeliest word, or explore several paths when accuracy matters most."
+          }
+        }
+      }
+    },
+    "**Le modèle** — celui que vous venez de choisir. Le plus gros est le plus juste, et le plus lent.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "**The model** — the one you just picked. The bigger it is, the more accurate, and the slower."
+          }
+        }
+      }
+    },
+    "**Le vocabulaire** — quelques phrases d'exemple, et vos noms propres cessent d'être devinés.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "**The vocabulary** — a few sample sentences, and your proper nouns stop being guesswork."
+          }
+        }
+      }
+    },
+    "**Les silences** — filtrés, le modèle n'a plus de blanc où inventer du texte.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "**The silences** — filtered out, the model has no blank left to invent text in."
+          }
+        }
+      }
+    },
     "Accessibilité": {
       "extractionState": "manual",
       "localizations": {
@@ -30,6 +74,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Active"
+          }
+        }
+      }
+    },
+    "Affiner la transcription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fine-tune the transcription"
           }
         }
       }
@@ -129,6 +184,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auto-Paste"
+          }
+        }
+      }
+    },
+    "Comment Whispeur transcrit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How Whispeur transcribes"
           }
         }
       }
@@ -419,6 +485,28 @@
         }
       }
     },
+    "Le modèle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model"
+          }
+        }
+      }
+    },
+    "Le texte": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text"
+          }
+        }
+      }
+    },
     "Maintenir enfoncé": {
       "extractionState": "manual",
       "localizations": {
@@ -672,6 +760,17 @@
         }
       }
     },
+    "Stratégie de décodage, température, seuil de silence : dans Réglages › Moteur, le jour où vous voudrez creuser.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decoding strategy, temperature, silence threshold: in Settings › Engine, the day you want to dig in."
+          }
+        }
+      }
+    },
     "Strict": {
       "extractionState": "manual",
       "localizations": {
@@ -690,6 +789,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Delete"
+          }
+        }
+      }
+    },
+    "Sur les quatre leviers, deux sont livrés inactifs. Les poser maintenant, c'est autant de gagné dès votre premier essai.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Two of the four levers ship inactive. Setting them now pays off from your very first try."
           }
         }
       }
@@ -815,6 +925,17 @@
         }
       }
     },
+    "Vider": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        }
+      }
+    },
     "Vider l'historique": {
       "extractionState": "manual",
       "localizations": {
@@ -826,6 +947,28 @@
         }
       }
     },
+    "Votre voix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your voice"
+          }
+        }
+      }
+    },
+    "Votre voix est découpée, passée au modèle, puis recollée en texte — le tout sur votre Mac. Quatre choses décident du résultat.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your voice is sliced up, run through the model, then pieced back into text — all on your Mac. Four things decide the result."
+          }
+        }
+      }
+    },
     "Whisper détecte automatiquement la langue parlée.": {
       "extractionState": "manual",
       "localizations": {
@@ -833,6 +976,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Whisper automatically detects the spoken language."
+          }
+        }
+      }
+    },
+    "Whisper n'obéit pas à des consignes : il imite ce qu'il lit. Donnez-lui un exemple, il en calque le vocabulaire et la ponctuation.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whisper does not follow instructions: it imitates what it reads. Give it an example and it will mirror its vocabulary and punctuation."
           }
         }
       }

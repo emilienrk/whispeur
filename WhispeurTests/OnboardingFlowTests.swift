@@ -69,16 +69,32 @@ struct OnboardingFlowTests {
 
         requirements.hasUsableModel = true
         flow.advance()
+        #expect(flow.step == .engineOverview)
+    }
+
+    @Test("Both engine steps explain rather than gate, so neither ever blocks")
+    func engineStepsAreOptional() {
+        let requirements = FakeRequirements(mic: true, accessibility: true, model: true)
+        let flow = OnboardingFlow(requirements: requirements)
+        flow.advance()
+
+        #expect(flow.step == .engineOverview)
+        #expect(flow.canAdvance == true)
+        flow.advance()
+
+        #expect(flow.step == .engine)
+        #expect(flow.canAdvance == true)
+        flow.advance()
         #expect(flow.step == .hotkey)
     }
 
-    @Test("Everything already granted lands straight on the hotkey step")
+    @Test("Everything already granted lands on the engine overview, never past it")
     func satisfiedStepsAreSkipped() {
         let flow = OnboardingFlow(
             requirements: FakeRequirements(mic: true, accessibility: true, model: true)
         )
         flow.advance()
-        #expect(flow.step == .hotkey)
+        #expect(flow.step == .engineOverview)
     }
 
     @Test("Back walks the steps in reverse and stops at welcome")
@@ -102,7 +118,7 @@ struct OnboardingFlowTests {
             requirements: FakeRequirements(mic: true, accessibility: true, model: true)
         )
         flow.advance()
-        #expect(flow.step == .hotkey)
+        #expect(flow.step == .engineOverview)
 
         flow.back()
         #expect(flow.step == .model)
@@ -113,6 +129,8 @@ struct OnboardingFlowTests {
         let flow = OnboardingFlow(
             requirements: FakeRequirements(mic: true, accessibility: true, model: true)
         )
+        flow.advance()
+        flow.advance()
         flow.advance()
         flow.advance()
         #expect(flow.step == .done)
